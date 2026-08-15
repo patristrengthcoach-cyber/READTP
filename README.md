@@ -9,7 +9,8 @@ No sustituye el criterio médico ni fisioterapéutico. Es una herramienta de apo
 ## Qué incluye
 
 ### Diseño de sesión
-- **Banco de ejercicios** organizado en 4 bloques — Calentamiento/activación, Bloque principal · Gimnasio, Bloque principal · Campo, Vuelta a la calma — filtrado automáticamente por la **fase RTP** seleccionada (Fase 1 Aproximación → Fase 7 Optimización individual). Cada ejercicio es una tarjeta editable con material, series, repeticiones, carga/intensidad, RPE, descanso, notas/precauciones, y **vídeo (YouTube) y/o imagen/GIF propios** (se puede subir una foto del ejercicio igual que en el Excel). Se pueden añadir ejercicios propios.
+- **Filtro global de jugador**: en la parte superior de la página (visible en todas las pestañas) hay un selector con los jugadores de baja actuales (nombre + ID + categoría, tomados de la pestaña de seguimiento). Elegir uno filtra automáticamente el diseño de sesión, la ficha, el registro de carga y el seguimiento por ese jugador; no hace falta volver a escribir su ID en cada pestaña.
+- **Banco de ejercicios** (pestaña **Diseño de sesión**) organizado en 4 bloques — Calentamiento/activación, Bloque principal · Gimnasio, Bloque principal · Campo, Vuelta a la calma — filtrado automáticamente por la **fase RTP** seleccionada (Fase 1 Aproximación → Fase 7 Optimización individual). Cada ejercicio es una tarjeta editable con material, series, repeticiones, carga/intensidad, RPE, descanso, notas/precauciones, y **vídeo (YouTube) y/o imagen/GIF propios** (se puede subir una foto del ejercicio igual que en el Excel). Se pueden añadir ejercicios propios.
 - **Selector de ubicación**: Solo gimnasio / Gimnasio + campo / Solo campo.
 - **Títulos de cada bloque editables**: los encabezados de la ficha (Calentamiento, Gimnasio, Campo, Vuelta a la calma, Test) se pueden renombrar directamente sobre la propia ficha.
 - **Imagen de la tarea de campo**: cuando la sesión incluye bloque de campo, se puede subir una imagen/diagrama de la tarea (aparece también en la ficha impresa).
@@ -19,13 +20,13 @@ No sustituye el criterio médico ni fisioterapéutico. Es una herramienta de apo
 
 ### Registro y carga
 - Guarda cada sesión ejecutada por jugador (incluye nº de sesión, objetivo, tests) y calcula **carga aguda (7 días)**, **carga crónica (media semanal de 4 semanas)**, **ACWR**, **monotonía** y **strain**, con el mismo criterio del Excel (ACWR 0.8–1.3 óptimo, >1.5 riesgo alto), más un mini-gráfico de carga diaria.
-- **Selectores de jugador (de baja) y de nº de sesión**: se elige el jugador desde la lista de jugadores en seguimiento y, opcionalmente, una sesión concreta para ver su detalle completo (objetivo, observaciones, tests) sin perder la vista agregada.
+- El jugador se elige desde el **filtro global** de arriba; dentro de la pestaña se puede elegir además una **sesión concreta** por su número para ver su detalle completo (objetivo, observaciones, tests) sin perder la vista agregada.
 
 ### Seguimiento de lesionados (informe descargable)
-- Roster de jugadores de baja con los mismos campos que el formulario **"Informe de lesiones - RCF"** (ID, nombre, categoría/equipo, fecha de lesión, diagnóstico, localización, lateralidad, tipología, mecanismo, reincidencia, contexto, severidad, pronóstico, posición, superficie, cómo se produjo).
+- Roster de jugadores de baja con los mismos campos que el formulario **"Informe de lesiones - RCF"** (ID, nombre, categoría/equipo, fecha de lesión, diagnóstico, localización, lateralidad, tipología, mecanismo, reincidencia, contexto, severidad, pronóstico, posición, superficie, cómo se produjo). El panel viene precargado con las últimas respuestas de ese formulario (Google Sheets) como punto de partida; en cuanto se guarda cualquier cambio desde la interfaz, esos datos de ejemplo dejan de usarse y prevalece lo guardado.
 - **Fase actualizada sola**: se toma de la fase de la última sesión registrada para ese jugador (si no hay sesiones, se usa la fase inicial indicada al darlo de alta en el seguimiento).
 - **Días de baja en vivo**, calculados siempre respecto a hoy.
-- Tabla con el mismo formato que el informe en papel (Cat. · Jugador · Lesión · Días de baja · Fase I–V · RTP · Optimización individual), coloreada por categoría, con nota editable de objetivo/estado bajo la fase actual (con botón para traerla directamente de la última sesión registrada).
+- Tabla con el mismo formato que el informe en papel (Cat. · Jugador · Lesión · Días de baja · Fase I–V · RTP · Optimización individual), coloreada por categoría, con nota editable de objetivo/estado bajo la fase actual (con botón para traerla directamente de la última sesión registrada). Si hay un jugador elegido en el filtro global, la tabla se filtra a solo ese jugador.
 - Botón **Descargar informe** (imprime/exporta a PDF en A4 apaisado) para repartir al staff; jugadores dados de alta se pueden archivar sin perder el histórico.
 
 ## Cómo abrirlo

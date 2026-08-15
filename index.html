@@ -45,6 +45,13 @@
 .rcf-btn.ghost{background:none;}
 
 /* ===== TABS ===== */
+.rcf-globalfilter{display:flex; align-items:center; gap:10px; padding:11px 26px; background:#EFECE1; border-bottom:1px solid var(--line); flex-wrap:wrap;}
+.rcf-globalfilter .gf-label{font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--navy); font-weight:600;}
+.rcf-globalfilter select{font-size:13px; padding:7px 10px; border:1.5px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); min-width:260px; max-width:100%;}
+.rcf-globalfilter select:focus{border-color:var(--navy);}
+.rcf-globalfilter .gf-hint{font-size:11px; color:var(--muted); margin-left:auto;}
+@media (max-width:640px){.rcf-globalfilter{padding:11px 16px;} .rcf-globalfilter .gf-hint{margin-left:0; flex-basis:100%;}}
+
 .rcf-tabs{display:flex; gap:6px; padding:16px 26px 0; flex-wrap:wrap; border-bottom:1px solid var(--line);}
 .rcf-tab{background:none; border:none; border-bottom:3px solid transparent; padding:10px 6px 12px; margin-right:14px; font-family:'Oswald',sans-serif; font-size:14px; font-weight:600; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); cursor:pointer;}
 .rcf-tab:hover{color:var(--ink);}
@@ -232,6 +239,8 @@
     </div>
   </div>
 
+  <div class="rcf-globalfilter no-print" id="globalFilterBar"></div>
+
   <div class="rcf-tabs no-print" id="tabSelector"></div>
 
   <div id="viewContainer"></div>
@@ -384,9 +393,25 @@
   }
   function nuevoLesionado(){
     return {id:uid(), jugId:'', nombre:'', categoria:'', posicion:'', fechaLesion:todayISO(), temporada:'', diagnostico:'',
-      localizacion:'', lateralidad:'', tipologia:'', mecanismo:'', reincidencia:'No', contexto:'', severidad:'', pronostico:'', superficie:'', comoSeProdujo:'',
+      localizacion:'', lateralidad:'', tipologia:'', mecanismo:'', reincidencia:'', contexto:'', severidad:'', pronostico:'', superficie:'', comoSeProdujo:'',
       faseInicial:1, nota:'', activo:true};
   }
+  // Datos de partida importados de "Informe de lesiones - RCF (respuestas)" (Google Sheets).
+  // Se cargan una única vez, solo si todavía no existe un registro guardado.
+  const SEED_LESIONADOS = [
+    {id:'seed_038', jugId:'RCF_038', nombre:'Hugo Carballeira Abella', categoria:'Juvenil A', posicion:'Extremo',
+      fechaLesion:'2025-10-05', temporada:'2026/27', diagnostico:'Inestabilidad hombro Derecho',
+      localizacion:'MS - Otros', lateralidad:'Derecha', tipologia:'Ósea', mecanismo:'Contacto',
+      reincidencia:'3 meses', contexto:'Partido oficial', severidad:'Grave', pronostico:'21-31 dias', superficie:'Césped Artificial',
+      comoSeProdujo:'Choque en abducción de hombro contra un contrario. Dislocación de hombro.',
+      faseInicial:1, nota:'', activo:true},
+    {id:'seed_091', jugId:'RCF_091', nombre:'Iker Outón Rodríguez', categoria:'Juvenil B', posicion:'Portero',
+      fechaLesion:'2026-08-10', temporada:'2026/27', diagnostico:'Pubalgia con sobrecarga ADD bilateral (+ Izquierdo)',
+      localizacion:'Pelvis - Sinfisis/Pubalgia', lateralidad:'Izquierda', tipologia:'Unión miotendinosa', mecanismo:'No Contacto',
+      reincidencia:'3 meses', contexto:'Entreno', severidad:'Severa', pronostico:'10-21 dias', superficie:'Césped Artificial',
+      comoSeProdujo:'Caída lateral en portería con despegue hacia lado contrario y contracción excéntrica del ADD izquierdo.',
+      faseInicial:1, nota:'', activo:true}
+  ];
   function diasBaja(fechaLesion){
     if(!fechaLesion) return '—';
     const today = new Date(); today.setHours(0,0,0,0);
@@ -430,7 +455,8 @@
     try{
       const l = await stGet('rcf-readapt-lesionados', true);
       if(l){ const d = JSON.parse(l); lesionados = d.lista||[]; informeMeta = {fecha: d.fecha||todayISO(), micro: d.micro||''}; }
-    }catch(e){}
+      else { lesionados = SEED_LESIONADOS.map(r=>Object.assign({}, r)); saveLesionados(); }
+    }catch(e){ lesionados = SEED_LESIONADOS.map(r=>Object.assign({}, r)); }
     try{
       const d = await stGet('rcf-readapt-draft', false);
       if(d){
@@ -593,7 +619,7 @@
     const items = sesion[section];
     const rows = items.length
       ? items.map((it,i)=>fichaRowHtml(it, section, i, items.length)).join('')
-      : '<tr class="rcf-emptyrow"><td colspan="9">Sin ejercicios todavía — añádelos desde la pestaña «Banco de ejercicios».</td></tr>';
+      : '<tr class="rcf-emptyrow"><td colspan="9">Sin ejercicios todavía — añádelos desde la pestaña «Diseño de sesión».</td></tr>';
     return '<div class="rcf-section">'
       + '<h2><span class="rcf-dot" style="background:'+SECTION_COLOR[section]+';"></span>'
       +   '<input type="text" class="rcf-sectitle-input" id="seclabel-'+section+'" value="'+esc(labelFor(section))+'"></h2>'
@@ -724,24 +750,19 @@
   function statChip(label, val){ return '<div class="rcf-stat"><div class="slabel">'+esc(label)+'</div><div class="sval" style="font-size:16px;">'+esc(val)+'</div></div>'; }
 
   function renderRegistroTab(){
-    const rosterOptions = lesionados.slice().sort((a,b)=> (a.nombre||a.jugId||'').localeCompare(b.nombre||b.jugId||''));
-    let selHtml = '<div class="rcf-filters no-print" style="border-bottom:none;">'
-      + '<div class="rcf-filtergroup" style="min-width:230px;"><span class="flabel">Jugador (de baja)</span>'
-      +   '<select id="regJugadorSelect"><option value="">— Selecciona un jugador —</option>'
-      +   rosterOptions.map(r=>'<option value="'+esc(r.jugId)+'"'+(state.jugId===r.jugId?' selected':'')+'>'+esc(r.nombre||r.jugId)+(r.categoria?' · '+esc(r.categoria):'')+(!r.activo?' (alta)':'')+'</option>').join('')
-      +   '</select></div>';
     const records = state.jugId ? (registro[state.jugId]||[]).slice().sort((a,b)=> a.fecha < b.fecha ? 1 : -1) : [];
+    let selHtml = '';
     if(state.jugId){
-      selHtml += '<div class="rcf-filtergroup" style="min-width:210px;"><span class="flabel">Nº de sesión</span>'
+      selHtml = '<div class="rcf-filters no-print" style="border-bottom:none;">'
+        + '<div class="rcf-filtergroup" style="min-width:210px;"><span class="flabel">Nº de sesión</span>'
         + '<select id="regSesionSelect"><option value="">Todas las sesiones</option>'
         + records.map(r=>'<option value="'+r.id+'"'+(state.regSesSel===r.id?' selected':'')+'>'+(r.numeroSesion?'Nº '+esc(r.numeroSesion)+' — ':'')+r.fecha+'</option>').join('')
-        + '</select></div>';
+        + '</select></div></div>';
     }
-    selHtml += '</div>';
 
     if(!state.jugId){
       return '<div class="rcf-section">' + selHtml
-        + '<p class="sdesc">Selecciona un jugador de baja (o escribe su ID en los datos de la sesión, arriba) para ver su registro de carga y el ACWR. Si no aparece en la lista, añádelo desde la pestaña «Seguimiento de lesionados».</p></div>';
+        + '<p class="sdesc">Selecciona un jugador en el filtro de arriba para ver su registro de carga y el ACWR. Si no aparece en la lista, añádelo desde la pestaña «Seguimiento de lesionados».</p></div>';
     }
 
     let detailHtml = '';
@@ -847,7 +868,7 @@
       +   field('Fecha de la lesión','ldr-fechaLesion',d.fechaLesion,'','date')
       +   field('Temporada','ldr-temporada',d.temporada,'2025/2026')
       +   selectFieldHtml('Fase inicial','ldr-faseInicial', faseOpts)
-      +   selectFieldHtml('Reincidencia','ldr-reincidencia', ['No','Sí'].map(o=>'<option value="'+o+'"'+(d.reincidencia===o?' selected':'')+'>'+o+'</option>').join(''))
+      +   field('Reincidencia','ldr-reincidencia', d.reincidencia, 'No / Sí, hace 3 meses…')
       + '</div>'
       + '<div class="rcf-field wide"><label>Diagnóstico médico / readapt. / fisio</label><input type="text" id="ldr-diagnostico" value="'+esc(d.diagnostico)+'"></div>'
       + '<button type="button" class="rcf-morebtn no-print" id="btnToggleMasDatos" style="margin:8px 0;">'+(rosterMoreOpen?'Ocultar más datos de la lesión':'+ Más datos de la lesión (localización, mecanismo, contexto…)')+'</button>';
@@ -896,12 +917,17 @@
   }
 
   function renderSeguimientoTab(){
-    const list = lesionados.filter(l => showArchivedRoster ? true : l.activo);
+    const list = state.jugId
+      ? lesionados.filter(l => l.jugId === state.jugId)
+      : lesionados.filter(l => showArchivedRoster ? true : l.activo);
     const rows = list.length ? list.map(seguimientoRowHtml).join('')
-      : '<tr class="rcf-emptyrow"><td colspan="12">No hay jugadores en seguimiento todavía. Añade uno con el botón de abajo.</td></tr>';
+      : (state.jugId
+          ? '<tr class="rcf-emptyrow"><td colspan="12">El jugador filtrado no está en el seguimiento todavía.</td></tr>'
+          : '<tr class="rcf-emptyrow"><td colspan="12">No hay jugadores en seguimiento todavía. Añade uno con el botón de abajo.</td></tr>');
     let html = '<div class="rcf-section rcf-print-landscape">'
       + '<h2>Seguimiento readaptación de lesiones</h2>'
       + '<p class="sdesc">La fase de cada jugador se actualiza sola según la última sesión registrada en «Registro y carga». Los días de baja se calculan en relación a la fecha de hoy.</p>'
+      + (state.jugId ? '<p class="sdesc">Filtrando por <b>'+esc(state.jugNombre||state.jugId)+'</b> — quita el filtro en el selector de arriba para ver a todos los jugadores.</p>' : '')
       + '<div class="rcf-datapanel" style="padding:0 0 14px;">'
       +   field('Fecha del informe','inf-fecha',informeMeta.fecha,'','date')
       +   field('Micro','inf-micro',informeMeta.micro,'MC20')
@@ -909,7 +935,7 @@
       + '<div class="rcf-hactions no-print" style="padding:0 0 14px;flex-wrap:wrap;">'
       +   '<button class="rcf-btn primary" id="btnPrintSeguimiento" style="background:var(--navy);border-color:var(--navy);color:#fff;">🖶 Descargar informe</button>'
       +   '<button class="rcf-btn" id="btnAddLesionado" style="border-color:var(--line);color:var(--ink);background:#fff;">+ Añadir jugador de baja</button>'
-      +   '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);"><input type="checkbox" id="chkShowArchived" '+(showArchivedRoster?'checked':'')+'> Ver también dados de alta</label>'
+      +   (state.jugId ? '' : '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);"><input type="checkbox" id="chkShowArchived" '+(showArchivedRoster?'checked':'')+'> Ver también dados de alta</label>')
       + '</div>';
     if(rosterFormOpen) html += rosterFormHtml();
     html += '<div class="print-only" style="margin-bottom:8px;"><b>FECHA</b> '+esc(informeMeta.fecha)+' &nbsp;·&nbsp; <b>MICRO</b> '+esc(informeMeta.micro)+'</div>';
@@ -932,16 +958,22 @@
       + '<div class="rcf-tl-bar">'+segs+'</div></div>';
   }
 
+  function jugadorSummaryLine(){
+    if(!state.jugId){
+      return '<div class="rcf-field wide"><label>Jugador</label><div style="padding:8px 10px;border:1.5px dashed var(--line);border-radius:8px;font-size:13px;color:var(--muted);">Ningún jugador seleccionado — elígelo en el selector de arriba.</div></div>';
+    }
+    return '<div class="rcf-field wide"><label>Jugador</label><div style="padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font-size:13.5px;font-weight:600;background:#fff;">'
+      + esc(state.jugNombre||'—') + ' <span class="mono" style="font-weight:400;color:var(--muted);">('+esc(state.jugId)+')</span>'
+      + (state.jugCat ? ' <span class="badge mat" style="margin-left:4px;">'+esc(state.jugCat)+'</span>' : '')
+      + '</div></div>';
+  }
+
   function renderContextPanel(){
     const fase = FASES.find(f=>f.id===Number(state.fase));
     let html = '<div class="rcf-datapanel">'
       + '<div class="rcf-field"><label>Fecha</label><input type="date" id="f-fecha" value="'+esc(state.fecha)+'"></div>'
       + '<div class="rcf-field"><label>Nº de sesión</label><input type="text" id="f-numeroSesion" value="'+esc(state.numeroSesion)+'" placeholder="1"></div>'
-      + '<div class="rcf-field"><label>ID jugador (RCF_000)</label><input type="text" id="f-jugId" value="'+esc(state.jugId)+'" placeholder="RCF_001"></div>'
-      + '<div class="rcf-field"><label>Nombre y apellido</label><input type="text" id="f-jugNombre" value="'+esc(state.jugNombre)+'"></div>'
-      + '<div class="rcf-field"><label>Categoría</label><select id="f-jugCat">'
-      +   ['Alevín','Infantil','Cadete','Juvenil'].map(c=>'<option value="'+c+'"'+(state.jugCat===c?' selected':'')+'>'+c+'</option>').join('')
-      + '</select></div>'
+      + jugadorSummaryLine()
       + '<div class="rcf-field"><label>RPE objetivo (previo)</label><input type="text" inputmode="numeric" id="f-rpeObjetivo" value="'+esc(state.rpeObjetivo)+'" placeholder="0-10"></div>'
       + '<div class="rcf-field wide"><label>Objetivo principal de la sesión</label><textarea id="f-objetivo" rows="2" placeholder="Ej.: consolidar tolerancia a cambios de dirección submáximos antes de progresar a sprint.">'+esc(state.objetivo)+'</textarea></div>'
       + '</div>';
@@ -951,19 +983,31 @@
 
     html += '<div class="rcf-filters no-print"><div class="rcf-filtergroup"><span class="flabel">Ubicación del bloque principal</span><div class="rcf-pills" id="tipolocSelector"></div></div></div>';
     html += renderTimelineBar();
-    html += '<div class="rcf-hint no-print">Elige la fase RTP y la ubicación del bloque principal: el banco de ejercicios y la ficha se filtran automáticamente. Los minutos de cada bloque se ajustan desde la pestaña «Ficha de sesión».</div>';
+    html += '<div class="rcf-hint no-print">Elige la fase RTP y la ubicación del bloque principal: el diseño de sesión y la ficha se filtran automáticamente. Los minutos de cada bloque se ajustan desde la pestaña «Ficha de sesión».</div>';
     return html;
+  }
+
+  function renderGlobalFilterBar(){
+    const rosterOptions = lesionados.slice().sort((a,b)=> (a.nombre||a.jugId||'').localeCompare(b.nombre||b.jugId||'', 'es'));
+    const opts = '<option value="">— Todos los jugadores —</option>' + rosterOptions.map(r=>
+      '<option value="'+esc(r.jugId)+'"'+(state.jugId===r.jugId?' selected':'')+'>'+esc(r.nombre||r.jugId)+' ('+esc(r.jugId||'—')+')'+(r.categoria?' · '+esc(r.categoria):'')+(!r.activo?' · alta':'')+'</option>'
+    ).join('');
+    return '<span class="gf-label">Jugador</span>'
+      + '<select id="globalJugadorSelect">'+opts+'</select>'
+      + (state.jugId ? '<button class="rcf-editbtn" id="btnClearGlobalFilter" title="Quitar filtro">✕</button>' : '')
+      + '<span class="gf-hint">Filtra el diseño de sesión, el registro de carga y el seguimiento por este jugador.</span>';
   }
 
   // ================= RENDER PRINCIPAL =================
   const TABS = [
-    {id:'banco', label:'Banco de ejercicios'},
+    {id:'banco', label:'Diseño de sesión'},
     {id:'ficha', label:'Ficha de sesión'},
     {id:'registro', label:'Registro y carga'},
     {id:'seguimiento', label:'Seguimiento de lesionados'}
   ];
 
   function render(){
+    document.getElementById('globalFilterBar').innerHTML = renderGlobalFilterBar();
     document.getElementById('tabSelector').innerHTML = TABS.map(t =>
       '<button class="rcf-tab'+(t.id===state.activeTab?' active':'')+'" data-tab="'+t.id+'">'+t.label+'</button>'
     ).join('');
@@ -992,7 +1036,7 @@
     }
 
     const modeNote = STORAGE_MODE==='cloud'
-      ? 'Los cambios se guardan compartidos: todo el cuerpo técnico que abra este panel verá el mismo banco de ejercicios y registro de carga.'
+      ? 'Los cambios se guardan compartidos: todo el cuerpo técnico que abra este panel verá el mismo diseño de sesión, seguimiento y registro de carga.'
       : 'Modo navegador: los cambios se guardan en este dispositivo (localStorage). Para compartirlos entre todo el cuerpo técnico, aloja este archivo detrás de un backend compartido o ábrelo dentro de Claude.';
     document.getElementById('storageNote').textContent = modeNote;
 
@@ -1018,6 +1062,20 @@
 
   // ================= HANDLERS (clic) — se reenganchan tras cada render() =================
   function attachHandlers(){
+    const gJugSel = document.getElementById('globalJugadorSelect');
+    if(gJugSel) gJugSel.onchange = ()=>{
+      state.jugId = gJugSel.value;
+      const rec = lesionados.find(l=>l.jugId===state.jugId);
+      state.jugNombre = rec ? rec.nombre : '';
+      state.jugCat = rec ? rec.categoria : '';
+      state.regSesSel = '';
+      saveDraft(); render();
+    };
+    const btnClearGF = document.getElementById('btnClearGlobalFilter');
+    if(btnClearGF) btnClearGF.onclick = ()=>{
+      state.jugId=''; state.jugNombre=''; state.jugCat=''; state.regSesSel='';
+      saveDraft(); render();
+    };
     document.querySelectorAll('[data-tab]').forEach(el=>el.onclick=()=>{ state.activeTab=el.dataset.tab; render(); });
     document.querySelectorAll('[data-fase]').forEach(el=>el.onclick=()=>{ state.fase=Number(el.dataset.fase); saveDraft(); render(); });
     document.querySelectorAll('[data-tipoloc]').forEach(el=>el.onclick=()=>{ state.tipoloc=el.dataset.tipoloc; saveDraft(); render(); });
@@ -1143,15 +1201,7 @@
     const campoRm = document.getElementById('campoimg-remove');
     if(campoRm) campoRm.onclick = ()=>{ state.campoImagen = null; saveDraft(); render(); };
 
-    // --- Registro y carga: selectores de jugador de baja / nº de sesión ---
-    const regJugSel = document.getElementById('regJugadorSelect');
-    if(regJugSel) regJugSel.onchange = ()=>{
-      state.jugId = regJugSel.value;
-      const rec = lesionados.find(l=>l.jugId===state.jugId);
-      if(rec){ state.jugNombre = rec.nombre; state.jugCat = rec.categoria; }
-      state.regSesSel = '';
-      saveDraft(); render();
-    };
+    // --- Registro y carga: selector de nº de sesión (el jugador viene del filtro global) ---
     const regSesSel = document.getElementById('regSesionSelect');
     if(regSesSel) regSesSel.onchange = ()=>{ state.regSesSel = regSesSel.value; render(); };
 
@@ -1227,8 +1277,6 @@
       let m;
       if(t.id==='f-fecha'){ state.fecha=t.value; debounce('draft', saveDraft); return; }
       if(t.id==='f-numeroSesion'){ state.numeroSesion=t.value; debounce('draft', saveDraft); return; }
-      if(t.id==='f-jugId'){ state.jugId=t.value.trim(); debounce('draft', saveDraft); return; }
-      if(t.id==='f-jugNombre'){ state.jugNombre=t.value; debounce('draft', saveDraft); return; }
       if(t.id==='f-rpeObjetivo'){ state.rpeObjetivo=t.value; debounce('draft', saveDraft); return; }
       if(t.id==='f-objetivo'){ state.objetivo=t.value; debounce('draft', saveDraft); return; }
       if(t.id==='f-rpeSesion'){ state.rpeSesion=t.value; recomputeSummary(); debounce('draft', saveDraft); return; }
@@ -1272,7 +1320,6 @@
     });
     app.addEventListener('change', (e)=>{
       const t=e.target;
-      if(t.id==='f-jugCat'){ state.jugCat=t.value; saveDraft(); }
       if(t.id==='f-cumplimiento'){ state.cumplimiento=t.value; saveDraft(); }
       let m;
       if((m = t.id.match(/^test-([^-]+)-lado$/))){
@@ -1280,16 +1327,6 @@
         if(item){ item.lado = t.value; saveDraft(); }
       }
     });
-    app.addEventListener('blur', (e)=>{
-      if(e.target && e.target.id==='f-jugId'){
-        const info = jugadores[state.jugId];
-        if(info){
-          if(!state.jugNombre && info.nombre){ state.jugNombre=info.nombre; const el=document.getElementById('f-jugNombre'); if(el) el.value=info.nombre; }
-          if(info.categoria){ state.jugCat=info.categoria; const el=document.getElementById('f-jugCat'); if(el) el.value=info.categoria; }
-          saveDraft();
-        }
-      }
-    }, true);
   }
 
   // ================= BOTONES DE CABECERA (estáticos) =================
@@ -1298,7 +1335,7 @@
     setTimeout(()=>window.print(), 60);
   };
   document.getElementById('btnNueva').onclick = () => {
-    if(!confirm('¿Empezar una sesión nueva? Se perderán los ejercicios añadidos a la sesión actual (el banco de ejercicios y el registro de carga no se ven afectados).')) return;
+    if(!confirm('¿Empezar una sesión nueva? Se perderán los ejercicios añadidos a la sesión actual (el diseño de sesión y el registro de carga no se ven afectados).')) return;
     sesion = {calentamiento:[], gym:[], campo:[], vuelta:[]};
     state.objetivo=''; state.rpeSesion=''; state.dolorEva='0'; state.cumplimiento='Completo'; state.observaciones='';
     saveDraft(); render();
