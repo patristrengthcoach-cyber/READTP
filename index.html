@@ -202,6 +202,26 @@
 .rcf-regtable th{font-family:'IBM Plex Mono',monospace; font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); text-align:left; padding:6px 8px; border-bottom:1.5px solid var(--line);}
 .rcf-regtable td{padding:6px 8px; border-bottom:1px solid var(--line);}
 .rcf-regtable .rmbtn{background:none; border:none; color:var(--red); cursor:pointer; font-size:13px;}
+.rcf-seg-checklist{background:#fff; border:1.5px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:6px;}
+.rcf-seg-chklist{display:flex; flex-wrap:wrap; gap:6px 16px;}
+.rcf-seg-chk{display:flex; align-items:center; gap:5px; font-size:12.5px; cursor:pointer;}
+.rcf-seg-chk .mono{color:var(--muted); font-size:10px;}
+.rcf-seg-chk input{accent-color:var(--navy);}
+
+/* ===== CALENDARIO SEMANAL ===== */
+.rcf-citas-grid{display:grid; grid-template-columns:repeat(7,minmax(150px,1fr)); gap:8px;}
+.rcf-cita-day{background:#fff; border:1.5px solid var(--line); border-radius:10px; padding:9px; display:flex; flex-direction:column; min-height:130px;}
+.rcf-cita-day.today{border-color:var(--red); box-shadow:0 0 0 1px var(--red) inset;}
+.rcf-cita-daytitle{font-family:'Oswald',sans-serif; font-size:12px; font-weight:600; text-transform:uppercase; display:flex; justify-content:space-between; align-items:baseline; margin-bottom:7px; color:var(--navy); border-bottom:1px solid var(--line); padding-bottom:6px;}
+.rcf-cita-daytitle .mono{font-size:10px; color:var(--muted); font-weight:400;}
+.rcf-cita-list{flex:1; display:flex; flex-direction:column; gap:6px; margin-bottom:8px;}
+.rcf-cita-empty{font-size:11px; color:var(--muted); font-style:italic; padding:6px 0;}
+.rcf-cita-item{background:var(--paper); border:1px solid var(--line); border-radius:7px; padding:6px 7px; font-size:11.5px; display:flex; gap:6px; align-items:flex-start;}
+.rcf-cita-hora{font-weight:700; color:var(--navy); font-size:12px; white-space:nowrap; padding-top:1px;}
+.rcf-cita-info{flex:1; min-width:0; line-height:1.4;}
+.rcf-cita-actions{display:flex; flex-direction:column; gap:2px;}
+@media (max-width:900px){.rcf-citas-grid{grid-template-columns:repeat(7,minmax(130px,1fr)); overflow-x:auto;}}
+@media print{.rcf-citas-grid{grid-template-columns:repeat(7,1fr);}}
 
 @media (max-width:640px){
   .rcf-header{padding:16px 16px;}
@@ -379,6 +399,26 @@
   let lesionados = [];       // roster de jugadores de baja (seguimiento global)
   let informeMeta = {fecha: todayISO(), micro:''};
   let rosterFormOpen = false, rosterMoreOpen = false, editingRosterId = null, rosterDraft = null, showArchivedRoster = false;
+  let citas = [];
+  let citaFormOpen = false, editingCitaId = null, citaDraft = null;
+  const DAY_NAMES = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+  function mondayOf(iso){
+    const d = new Date(iso+'T00:00:00');
+    const day = (d.getDay()+6)%7;
+    d.setDate(d.getDate()-day);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function addDaysISO(iso, n){
+    const d = new Date(iso+'T00:00:00');
+    d.setDate(d.getDate()+n);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function fmtDateShort(iso){ const d=new Date(iso+'T00:00:00'); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); }
+  function fmtDateEs(iso){ const d=new Date(iso+'T00:00:00'); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
+  let citasWeekStart = mondayOf(todayISO());
+  function nuevaCita(fechaDefault, jugIdDefault){
+    return {id:uid(), fecha: fechaDefault||todayISO(), hora:'', jugId: jugIdDefault||'', lugar:'Gimnasio', numeroSesion:'', notas:''};
+  }
 
   const PHASE_COL_TITLE = {1:'Fase I · Aproximación', 2:'Fase II · Orientación', 3:'Fase III · Preoptimización', 4:'Fase IV · Optimización RTT', 5:'Fase V · RTS', 6:'RTP', 7:'Optimización individual'};
   const CAT_PALETTE = [
@@ -458,6 +498,10 @@
       else { lesionados = SEED_LESIONADOS.map(r=>Object.assign({}, r)); saveLesionados(); }
     }catch(e){ lesionados = SEED_LESIONADOS.map(r=>Object.assign({}, r)); }
     try{
+      const c = await stGet('rcf-readapt-citas', true);
+      if(c) citas = JSON.parse(c) || [];
+    }catch(e){}
+    try{
       const d = await stGet('rcf-readapt-draft', false);
       if(d){
         const parsed = JSON.parse(d);
@@ -471,6 +515,7 @@
   function saveRegistro(){ stSet('rcf-readapt-registro', JSON.stringify(registro), true); }
   function saveJugadores(){ stSet('rcf-readapt-jugadores', JSON.stringify(jugadores), true); }
   function saveLesionados(){ stSet('rcf-readapt-lesionados', JSON.stringify({lista:lesionados, fecha:informeMeta.fecha, micro:informeMeta.micro}), true); }
+  function saveCitas(){ stSet('rcf-readapt-citas', JSON.stringify(citas), true); }
   function saveDraft(){ stSet('rcf-readapt-draft', JSON.stringify({state, sesion}), false); }
 
   // ================= BANCO: helpers =================
@@ -916,30 +961,134 @@
       + '</td></tr>';
   }
 
+  // ================= CALENDARIO SEMANAL DE CITAS =================
+  function citaItemHtml(c){
+    const jug = lesionados.find(l=>l.jugId===c.jugId);
+    const nombre = jug ? jug.nombre : (c.jugId||'Sin jugador');
+    return '<div class="rcf-cita-item">'
+      + '<div class="rcf-cita-hora mono">'+esc(c.hora||'--:--')+'</div>'
+      + '<div class="rcf-cita-info"><b>'+esc(nombre)+'</b>'
+      +   (c.jugId ? ' <span class="mono" style="color:var(--muted);">('+esc(c.jugId)+')</span>' : '')
+      +   (c.lugar ? ' <span class="badge mat">'+esc(c.lugar)+'</span>' : '')
+      +   (c.numeroSesion ? ' <span class="badge added">Nº '+esc(c.numeroSesion)+'</span>' : '')
+      +   (c.notas ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">'+esc(c.notas)+'</div>' : '')
+      + '</div>'
+      + '<div class="no-print rcf-cita-actions"><button class="rcf-editbtn" data-citaedit="'+c.id+'" title="Editar">✎</button><button class="rmbtn" data-citadel="'+c.id+'" title="Eliminar">✕</button></div>'
+      + '</div>';
+  }
+  function citaDayColHtml(fechaISO, dayName){
+    const items = citas.filter(c=>c.fecha===fechaISO).slice().sort((a,b)=> (a.hora||'99:99').localeCompare(b.hora||'99:99'));
+    const isToday = fechaISO === todayISO();
+    const rows = items.length ? items.map(citaItemHtml).join('') : '<div class="rcf-cita-empty">Sin citas</div>';
+    return '<div class="rcf-cita-day'+(isToday?' today':'')+'">'
+      + '<div class="rcf-cita-daytitle">'+dayName+'<span class="mono">'+fmtDateShort(fechaISO)+'</span></div>'
+      + '<div class="rcf-cita-list">'+rows+'</div>'
+      + '<button class="rcf-morebtn no-print" data-addcitaday="'+fechaISO+'" style="margin-top:0;padding:5px;font-size:11px;">+ cita</button>'
+      + '</div>';
+  }
+  function openCitaForm(record, fechaDefault){
+    citaDraft = record ? Object.assign({}, record) : nuevaCita(fechaDefault, state.jugId);
+    editingCitaId = record ? record.id : null;
+    citaFormOpen = true;
+  }
+  function readCitaForm(){
+    const g = (id)=>{ const el=document.getElementById(id); return el ? el.value.trim() : ''; };
+    return {
+      id: editingCitaId || (citaDraft && citaDraft.id) || uid(),
+      fecha:g('cit-fecha'), hora:g('cit-hora'), jugId:g('cit-jugId'),
+      lugar:g('cit-lugar'), numeroSesion:g('cit-numeroSesion'), notas:g('cit-notas')
+    };
+  }
+  function citaFormHtml(){
+    const d = citaDraft;
+    const rosterOpts = '<option value="">— Sin jugador asignado —</option>' + lesionados.slice()
+      .sort((a,b)=>(a.nombre||a.jugId||'').localeCompare(b.nombre||b.jugId||'', 'es'))
+      .map(l=>'<option value="'+esc(l.jugId)+'"'+(d.jugId===l.jugId?' selected':'')+'>'+esc(l.nombre||l.jugId)+' ('+esc(l.jugId||'—')+')'+(l.categoria?' · '+esc(l.categoria):'')+'</option>').join('');
+    const lugarOpts = ['Gimnasio','Campo','Gimnasio + Campo','Clínica/Fisio'].map(o=>'<option value="'+o+'"'+(d.lugar===o?' selected':'')+'>'+o+'</option>').join('');
+    return '<div class="rcf-summary">'
+      + '<h2 style="margin:0 0 10px;font-size:15px;text-transform:uppercase;">'+(editingCitaId?'Editar cita':'Añadir cita')+'</h2>'
+      + '<div class="rcf-datapanel" style="padding:0;margin-bottom:4px;">'
+      +   field('Fecha','cit-fecha', d.fecha, '', 'date')
+      +   '<div class="rcf-field"><label>Hora</label><input type="time" id="cit-hora" value="'+esc(d.hora)+'"></div>'
+      +   selectFieldHtml('Jugador','cit-jugId', rosterOpts)
+      +   selectFieldHtml('Lugar','cit-lugar', lugarOpts)
+      +   field('Nº de sesión (opcional)','cit-numeroSesion', d.numeroSesion)
+      + '</div>'
+      + '<div class="rcf-field wide"><label>Notas</label><input type="text" id="cit-notas" value="'+esc(d.notas)+'" placeholder="Ej. traer botas de fútbol, prueba de campo…"></div>'
+      + '<div class="rcf-hactions no-print" style="padding:0;margin-top:10px;">'
+      +   '<button class="rcf-btn primary" id="btnCitaSave" style="background:var(--navy);border-color:var(--navy);color:#fff;">Guardar</button>'
+      +   '<button class="rcf-btn" id="btnCitaCancel" style="border-color:var(--line);color:var(--ink);background:#fff;">Cancelar</button>'
+      + '</div></div>';
+  }
+  function renderCitasTab(){
+    const days = []; for(let i=0;i<7;i++){ days.push(addDaysISO(citasWeekStart, i)); }
+    let html = '<div class="rcf-section rcf-print-landscape">'
+      + '<h2>Calendario semanal de citas</h2>'
+      + '<p class="sdesc">Horarios de convocatoria de cada jugador de baja para su sesión de readaptación, semana a semana.</p>'
+      + '<div class="rcf-hactions no-print" style="padding:0 0 12px;flex-wrap:wrap;">'
+      +   '<button class="rcf-btn" id="btnCitaPrevWeek" style="border-color:var(--line);background:#fff;color:var(--ink);">◀ Semana anterior</button>'
+      +   '<span class="mono" style="align-self:center;font-size:13px;font-weight:600;color:var(--navy);">'+fmtDateEs(days[0])+' – '+fmtDateEs(days[6])+'</span>'
+      +   '<button class="rcf-btn" id="btnCitaNextWeek" style="border-color:var(--line);background:#fff;color:var(--ink);">Semana siguiente ▶</button>'
+      +   '<button class="rcf-btn" id="btnCitaToday" style="border-color:var(--line);background:#fff;color:var(--ink);">Hoy</button>'
+      +   '<button class="rcf-btn primary" id="btnAddCita" style="background:var(--navy);border-color:var(--navy);color:#fff;">+ Añadir cita</button>'
+      +   '<button class="rcf-btn primary" id="btnPrintCitas" style="background:var(--navy);border-color:var(--navy);color:#fff;">🖶 Descargar semana</button>'
+      + '</div>';
+    if(citaFormOpen) html += citaFormHtml();
+    html += '<div class="print-only" style="margin:8px 0;"><b>SEMANA</b> '+fmtDateEs(days[0])+' – '+fmtDateEs(days[6])+'</div>';
+    html += '<div class="rcf-citas-grid">' + days.map((d,i)=>citaDayColHtml(d, DAY_NAMES[i])).join('') + '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  let segSelectedIds = null; // Set de ids de lesionados marcados para el informe (null = sin inicializar todavía)
+  function ensureSegSelection(){
+    if(segSelectedIds === null){
+      segSelectedIds = new Set(
+        (state.jugId ? lesionados.filter(l=>l.jugId===state.jugId) : lesionados.filter(l=>l.activo)).map(l=>l.id)
+      );
+    }
+  }
+  function segChecklistHtml(){
+    const base = showArchivedRoster ? lesionados.slice() : lesionados.filter(l=>l.activo);
+    const sorted = base.sort((a,b)=> (a.nombre||a.jugId||'').localeCompare(b.nombre||b.jugId||'', 'es'));
+    const rows = sorted.length ? sorted.map(l=>{
+      const checked = segSelectedIds.has(l.id);
+      return '<label class="rcf-seg-chk"><input type="checkbox" data-segchk="'+l.id+'" '+(checked?'checked':'')+'> '
+        + esc(l.nombre||l.jugId||'—')+' <span class="mono">('+esc(l.jugId||'—')+')</span>'
+        + (l.categoria?' · '+esc(l.categoria):'')+(!l.activo?' · alta':'')+'</label>';
+    }).join('') : '<span class="sdesc" style="margin:0;">Todavía no hay jugadores de baja dados de alta en el seguimiento.</span>';
+    return '<div class="rcf-seg-checklist no-print">'
+      + '<div class="rcf-blockmin" style="margin-bottom:6px;flex-wrap:wrap;"><b class="mono" style="text-transform:uppercase;color:var(--muted);font-size:10.5px;">Jugadores en el informe</b>'
+      +   ' <button class="rcf-editbtn" id="btnSegSelAll" title="Seleccionar todos">Todos</button>'
+      +   ' <button class="rcf-editbtn" id="btnSegSelNone" title="Ninguno">Ninguno</button>'
+      +   '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-left:auto;"><input type="checkbox" id="chkShowArchived" '+(showArchivedRoster?'checked':'')+'> Ver también dados de alta</label>'
+      + '</div>'
+      + '<div class="rcf-seg-chklist">'+rows+'</div>'
+      + '</div>';
+  }
   function renderSeguimientoTab(){
-    const list = state.jugId
-      ? lesionados.filter(l => l.jugId === state.jugId)
-      : lesionados.filter(l => showArchivedRoster ? true : l.activo);
+    ensureSegSelection();
+    const base = showArchivedRoster ? lesionados.slice() : lesionados.filter(l=>l.activo);
+    const list = base.filter(l=>segSelectedIds.has(l.id));
     const rows = list.length ? list.map(seguimientoRowHtml).join('')
-      : (state.jugId
-          ? '<tr class="rcf-emptyrow"><td colspan="12">El jugador filtrado no está en el seguimiento todavía.</td></tr>'
+      : (lesionados.length
+          ? '<tr class="rcf-emptyrow"><td colspan="12">No hay jugadores seleccionados para el informe. Marca al menos uno en la lista de arriba.</td></tr>'
           : '<tr class="rcf-emptyrow"><td colspan="12">No hay jugadores en seguimiento todavía. Añade uno con el botón de abajo.</td></tr>');
     let html = '<div class="rcf-section rcf-print-landscape">'
       + '<h2>Seguimiento readaptación de lesiones</h2>'
-      + '<p class="sdesc">La fase de cada jugador se actualiza sola según la última sesión registrada en «Registro y carga». Los días de baja se calculan en relación a la fecha de hoy.</p>'
-      + (state.jugId ? '<p class="sdesc">Filtrando por <b>'+esc(state.jugNombre||state.jugId)+'</b> — quita el filtro en el selector de arriba para ver a todos los jugadores.</p>' : '')
+      + '<p class="sdesc">La fase de cada jugador se actualiza sola según la última sesión registrada en «Registro y carga». Los días de baja se calculan en relación a la fecha de hoy. Marca uno o varios jugadores para incluirlos en el informe.</p>'
       + '<div class="rcf-datapanel" style="padding:0 0 14px;">'
       +   field('Fecha del informe','inf-fecha',informeMeta.fecha,'','date')
       +   field('Micro','inf-micro',informeMeta.micro,'MC20')
       + '</div>'
-      + '<div class="rcf-hactions no-print" style="padding:0 0 14px;flex-wrap:wrap;">'
+      + '<div class="rcf-hactions no-print" style="padding:0 0 10px;flex-wrap:wrap;">'
       +   '<button class="rcf-btn primary" id="btnPrintSeguimiento" style="background:var(--navy);border-color:var(--navy);color:#fff;">🖶 Descargar informe</button>'
       +   '<button class="rcf-btn" id="btnAddLesionado" style="border-color:var(--line);color:var(--ink);background:#fff;">+ Añadir jugador de baja</button>'
-      +   (state.jugId ? '' : '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);"><input type="checkbox" id="chkShowArchived" '+(showArchivedRoster?'checked':'')+'> Ver también dados de alta</label>')
-      + '</div>';
+      + '</div>'
+      + segChecklistHtml();
     if(rosterFormOpen) html += rosterFormHtml();
-    html += '<div class="print-only" style="margin-bottom:8px;"><b>FECHA</b> '+esc(informeMeta.fecha)+' &nbsp;·&nbsp; <b>MICRO</b> '+esc(informeMeta.micro)+'</div>';
-    html += '<div style="overflow-x:auto;"><table class="rcf-fichatable">'
+    html += '<div class="print-only" style="margin:12px 0 8px;"><b>FECHA</b> '+esc(informeMeta.fecha)+' &nbsp;·&nbsp; <b>MICRO</b> '+esc(informeMeta.micro)+'</div>';
+    html += '<div style="overflow-x:auto;margin-top:12px;"><table class="rcf-fichatable">'
       + '<thead><tr><th>Cat.</th><th>Jugador</th><th>Lesión</th><th>Días de baja</th>'
       + FASES.map(f=>'<th style="min-width:170px;">'+PHASE_COL_TITLE[f.id]+'</th>').join('')
       + '<th class="no-print"></th></tr></thead>'
@@ -1002,6 +1151,7 @@
   const TABS = [
     {id:'banco', label:'Diseño de sesión'},
     {id:'ficha', label:'Ficha de sesión'},
+    {id:'citas', label:'Calendario semanal'},
     {id:'registro', label:'Registro y carga'},
     {id:'seguimiento', label:'Seguimiento de lesionados'}
   ];
@@ -1012,12 +1162,14 @@
       '<button class="rcf-tab'+(t.id===state.activeTab?' active':'')+'" data-tab="'+t.id+'">'+t.label+'</button>'
     ).join('');
 
-    const showContext = state.activeTab !== 'seguimiento';
+    const showContext = state.activeTab !== 'seguimiento' && state.activeTab !== 'citas';
     let body = showContext ? renderContextPanel() : '';
     if(state.activeTab === 'banco'){
       body += sectionsVisible(state.tipoloc).map(renderBankSection).join('');
     } else if(state.activeTab === 'ficha'){
       body += renderFichaTab();
+    } else if(state.activeTab === 'citas'){
+      body += renderCitasTab();
     } else if(state.activeTab === 'registro'){
       body += renderRegistroTab();
     } else {
@@ -1212,8 +1364,10 @@
     if(btnRosSave) btnRosSave.onclick = ()=>{
       const rec = readRosterForm();
       if(!rec.nombre && !rec.jugId){ alert('Indica al menos el nombre o el ID del jugador.'); return; }
+      const isNew = !editingRosterId;
       if(editingRosterId){ lesionados = lesionados.map(l=> l.id===editingRosterId ? rec : l); }
       else { lesionados.push(rec); }
+      if(isNew){ ensureSegSelection(); segSelectedIds.add(rec.id); }
       saveLesionados();
       rosterFormOpen=false; editingRosterId=null; rosterDraft=null;
       render();
@@ -1224,6 +1378,21 @@
     if(btnMasDatos) btnMasDatos.onclick = ()=>{ rosterDraft = readRosterForm(); rosterMoreOpen = !rosterMoreOpen; render(); };
     const chkArch = document.getElementById('chkShowArchived');
     if(chkArch) chkArch.onchange = ()=>{ showArchivedRoster = chkArch.checked; render(); };
+    document.querySelectorAll('[data-segchk]').forEach(el=>el.onchange=()=>{
+      ensureSegSelection();
+      const id = el.dataset.segchk;
+      if(el.checked) segSelectedIds.add(id); else segSelectedIds.delete(id);
+      render();
+    });
+    const btnSegAll = document.getElementById('btnSegSelAll');
+    if(btnSegAll) btnSegAll.onclick = ()=>{
+      ensureSegSelection();
+      const base = showArchivedRoster ? lesionados : lesionados.filter(l=>l.activo);
+      base.forEach(l=>segSelectedIds.add(l.id));
+      render();
+    };
+    const btnSegNone = document.getElementById('btnSegSelNone');
+    if(btnSegNone) btnSegNone.onclick = ()=>{ ensureSegSelection(); segSelectedIds.clear(); render(); };
     document.querySelectorAll('[data-lesedit]').forEach(el=>el.onclick=()=>{
       const rec = lesionados.find(l=>l.id===el.dataset.lesedit);
       if(rec) openRosterForm(rec);
@@ -1244,11 +1413,50 @@
     });
     document.querySelectorAll('[data-lesdel]').forEach(el=>el.onclick=()=>{
       if(!confirm('¿Eliminar definitivamente este jugador del seguimiento de lesionados?')) return;
-      lesionados = lesionados.filter(l=>l.id!==el.dataset.lesdel);
+      const delId = el.dataset.lesdel;
+      lesionados = lesionados.filter(l=>l.id!==delId);
+      if(segSelectedIds) segSelectedIds.delete(delId);
       saveLesionados(); render();
     });
     const btnPrintSeg = document.getElementById('btnPrintSeguimiento');
     if(btnPrintSeg) btnPrintSeg.onclick = ()=>{ setTimeout(()=>window.print(), 30); };
+
+    // --- Calendario semanal de citas ---
+    const btnAddCita = document.getElementById('btnAddCita');
+    if(btnAddCita) btnAddCita.onclick = ()=>{ openCitaForm(null, todayISO()); render(); };
+    document.querySelectorAll('[data-addcitaday]').forEach(el=>el.onclick=()=>{
+      openCitaForm(null, el.dataset.addcitaday); render();
+    });
+    document.querySelectorAll('[data-citaedit]').forEach(el=>el.onclick=()=>{
+      const rec = citas.find(c=>c.id===el.dataset.citaedit);
+      if(rec) openCitaForm(rec);
+      render();
+    });
+    document.querySelectorAll('[data-citadel]').forEach(el=>el.onclick=()=>{
+      if(!confirm('¿Eliminar esta cita?')) return;
+      citas = citas.filter(c=>c.id!==el.dataset.citadel);
+      saveCitas(); render();
+    });
+    const btnCitaSave = document.getElementById('btnCitaSave');
+    if(btnCitaSave) btnCitaSave.onclick = ()=>{
+      const rec = readCitaForm();
+      if(!rec.fecha || !rec.hora){ alert('Indica al menos la fecha y la hora de la cita.'); return; }
+      if(editingCitaId){ citas = citas.map(c=> c.id===editingCitaId ? rec : c); }
+      else { citas.push(rec); }
+      saveCitas();
+      citaFormOpen=false; editingCitaId=null; citaDraft=null;
+      render();
+    };
+    const btnCitaCancel = document.getElementById('btnCitaCancel');
+    if(btnCitaCancel) btnCitaCancel.onclick = ()=>{ citaFormOpen=false; editingCitaId=null; citaDraft=null; render(); };
+    const btnCitaPrev = document.getElementById('btnCitaPrevWeek');
+    if(btnCitaPrev) btnCitaPrev.onclick = ()=>{ citasWeekStart = addDaysISO(citasWeekStart, -7); render(); };
+    const btnCitaNext = document.getElementById('btnCitaNextWeek');
+    if(btnCitaNext) btnCitaNext.onclick = ()=>{ citasWeekStart = addDaysISO(citasWeekStart, 7); render(); };
+    const btnCitaToday = document.getElementById('btnCitaToday');
+    if(btnCitaToday) btnCitaToday.onclick = ()=>{ citasWeekStart = mondayOf(todayISO()); render(); };
+    const btnPrintCitas = document.getElementById('btnPrintCitas');
+    if(btnPrintCitas) btnPrintCitas.onclick = ()=>{ setTimeout(()=>window.print(), 30); };
 
     const btnG = document.getElementById('btnGuardarRegistro');
     if(btnG) btnG.onclick = ()=>{

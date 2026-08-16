@@ -24,10 +24,16 @@ No sustituye el criterio médico ni fisioterapéutico. Es una herramienta de apo
 
 ### Seguimiento de lesionados (informe descargable)
 - Roster de jugadores de baja con los mismos campos que el formulario **"Informe de lesiones - RCF"** (ID, nombre, categoría/equipo, fecha de lesión, diagnóstico, localización, lateralidad, tipología, mecanismo, reincidencia, contexto, severidad, pronóstico, posición, superficie, cómo se produjo). El panel viene precargado con las últimas respuestas de ese formulario (Google Sheets) como punto de partida; en cuanto se guarda cualquier cambio desde la interfaz, esos datos de ejemplo dejan de usarse y prevalece lo guardado.
+- **Selección múltiple para el informe**: una lista de casillas permite marcar uno, varios o todos los jugadores que se quieren incluir en el informe (con botones "Todos" / "Ninguno"), independiente del filtro global de arriba. Al dar de alta un jugador nuevo se marca automáticamente.
 - **Fase actualizada sola**: se toma de la fase de la última sesión registrada para ese jugador (si no hay sesiones, se usa la fase inicial indicada al darlo de alta en el seguimiento).
 - **Días de baja en vivo**, calculados siempre respecto a hoy.
-- Tabla con el mismo formato que el informe en papel (Cat. · Jugador · Lesión · Días de baja · Fase I–V · RTP · Optimización individual), coloreada por categoría, con nota editable de objetivo/estado bajo la fase actual (con botón para traerla directamente de la última sesión registrada). Si hay un jugador elegido en el filtro global, la tabla se filtra a solo ese jugador.
+- Tabla con el mismo formato que el informe en papel (Cat. · Jugador · Lesión · Días de baja · Fase I–V · RTP · Optimización individual), coloreada por categoría, con nota editable de objetivo/estado bajo la fase actual (con botón para traerla directamente de la última sesión registrada).
 - Botón **Descargar informe** (imprime/exporta a PDF en A4 apaisado) para repartir al staff; jugadores dados de alta se pueden archivar sin perder el histórico.
+
+### Calendario semanal de citas
+- Pestaña con una vista semanal (lunes a domingo) para anotar la **hora a la que se cita a cada jugador** a su sesión de readaptación — como una agenda semanal de readaptación.
+- Cada cita tiene fecha, hora, jugador (elegido del seguimiento), lugar (gimnasio / campo / gimnasio + campo / clínica-fisio), nº de sesión opcional y notas.
+- Navegación semana anterior / siguiente / hoy, botón "+ cita" tanto general como por día concreto, y **Descargar semana** para imprimir/exportar la agenda en A4 apaisado.
 
 ## Cómo abrirlo
 
