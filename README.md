@@ -36,6 +36,12 @@ No sustituye el criterio médico ni fisioterapéutico. Es una herramienta de apo
 - Cada cita tiene fecha, hora, jugador (elegido del seguimiento), lugar (gimnasio / campo / gimnasio + campo / clínica-fisio), nº de sesión opcional y notas.
 - Navegación semana anterior / siguiente / hoy, botón "+ cita" tanto general como por día concreto, y **Descargar semana** para imprimir/exportar la agenda en A4 apaisado.
 
+### Memoria de sesiones
+- Pestaña con un filtro **De baja / De alta** y, dentro de cada uno, una tarjeta por jugador (con el nº de sesiones que tiene guardadas) para elegir con quién trabajar.
+- Al elegir un jugador, se listan **todas sus sesiones guardadas** en una tabla totalmente editable: fecha, nº de sesión, fase, objetivo, duración, RPE, dolor EVA, cumplimiento y observaciones. La carga (duración × RPE) se recalcula sola al editar duración o RPE.
+- Pensada para corregir después del hecho — por ejemplo, si al guardar la sesión se apuntó mal el RPE o se te olvidó marcar "Parcial" en vez de "Completo". Cada cambio se guarda directamente sobre esa sesión.
+- También permite eliminar una sesión guardada por error.
+
 ## Cómo abrirlo
 
 No necesita instalación ni servidor: es un único archivo HTML autocontenido.

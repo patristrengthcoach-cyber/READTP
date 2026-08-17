@@ -225,6 +225,18 @@
 @media (max-width:900px){.rcf-citas-grid{grid-template-columns:repeat(7,minmax(130px,1fr)); overflow-x:auto;}}
 @media print{.rcf-citas-grid{grid-template-columns:repeat(7,1fr);}}
 
+/* ===== MEMORIA DE SESIONES ===== */
+.rcf-memoria-playerlist{display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 16px;}
+.rcf-memoria-playercard{background:#fff; border:1.5px solid var(--line); border-radius:10px; padding:8px 12px; cursor:pointer; text-align:left; min-width:150px;}
+.rcf-memoria-playercard:hover{border-color:#c7cfd9;}
+.rcf-memoria-playercard.active{border-color:var(--navy); background:var(--navy);}
+.rcf-memoria-playercard .mpc-name{font-family:'Oswald',sans-serif; font-weight:600; font-size:13px; color:var(--ink);}
+.rcf-memoria-playercard.active .mpc-name{color:#fff;}
+.rcf-memoria-playercard .mpc-meta{font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--muted); margin-top:2px;}
+.rcf-memoria-playercard.active .mpc-meta{color:#c7cfe0;}
+.rcf-memoria-playercard .mpc-count{font-size:10.5px; color:var(--muted); margin-top:3px;}
+.rcf-memoria-playercard.active .mpc-count{color:#c7cfe0;}
+
 @media (max-width:640px){
   .rcf-header{padding:16px 16px;}
   .rcf-tabs,.rcf-cats,.rcf-fases,.rcf-filters,.rcf-section,.rcf-timeline,.rcf-datapanel{padding-left:16px; padding-right:16px;}
@@ -420,6 +432,11 @@
   let fbUnsubscribe = null;
   let fbAppRef = null;
   let rosterFormOpen = false, rosterMoreOpen = false, editingRosterId = null, rosterDraft = null, showArchivedRoster = false;
+  let memoriaFiltro = 'baja'; // 'baja' | 'alta'
+  const MEMORIA_FILTROS = [
+    {id:'baja', label:'De baja', sub:'Actualmente lesionados'},
+    {id:'alta', label:'De alta', sub:'Ya recuperados'}
+  ];
   let citas = [];
   let citaFormOpen = false, editingCitaId = null, citaDraft = null;
   const DAY_NAMES = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
@@ -1279,6 +1296,71 @@
     return html;
   }
 
+  // ================= MEMORIA DE SESIONES =================
+  function memoriaFiltroPillsHtml(){
+    return MEMORIA_FILTROS.map(f=>
+      '<button class="rcf-pill'+(memoriaFiltro===f.id?' active':'')+'" data-memfiltro="'+f.id+'">'+f.label+'<small>'+f.sub+'</small></button>'
+    ).join('');
+  }
+  function memoriaPlayerCardHtml(l){
+    const count = (registro[l.jugId]||[]).length;
+    const active = state.jugId === l.jugId;
+    return '<button class="rcf-memoria-playercard'+(active?' active':'')+'" data-memplayer="'+esc(l.jugId)+'">'
+      + '<div class="mpc-name">'+esc(l.nombre||l.jugId||'—')+'</div>'
+      + '<div class="mpc-meta">'+esc(l.jugId||'—')+(l.categoria?' · '+esc(l.categoria):'')+'</div>'
+      + '<div class="mpc-count">'+count+' sesión'+(count===1?'':'es')+' guardada'+(count===1?'':'s')+'</div>'
+      + '</button>';
+  }
+  function memoriaRowHtml(r){
+    const faseOpts = FASES.map(f=>'<option value="'+f.id+'"'+(Number(r.fase)===f.id?' selected':'')+'>'+f.id+' · '+f.label+'</option>').join('');
+    const cumplOpts = ['Completo','Parcial','No realizada'].map(o=>'<option value="'+o+'"'+(r.cumplimiento===o?' selected':'')+'>'+o+'</option>').join('');
+    return '<tr>'
+      + '<td style="width:125px;"><input type="date" id="mem-'+r.id+'-fecha" value="'+esc(r.fecha||'')+'"></td>'
+      + '<td style="width:55px;"><input type="text" id="mem-'+r.id+'-numeroSesion" value="'+esc(r.numeroSesion||'')+'"></td>'
+      + '<td style="width:170px;"><select id="mem-'+r.id+'-fase">'+faseOpts+'</select></td>'
+      + '<td style="min-width:170px;"><input type="text" id="mem-'+r.id+'-objetivo" value="'+esc(r.objetivo||'')+'"></td>'
+      + '<td style="width:65px;"><input type="text" inputmode="numeric" id="mem-'+r.id+'-duracion" value="'+esc(r.duracion||'')+'"></td>'
+      + '<td style="width:50px;"><input type="text" inputmode="numeric" id="mem-'+r.id+'-rpe" value="'+esc(r.rpe||'')+'"></td>'
+      + '<td class="mono" style="width:55px;" id="memcarga-'+r.id+'">'+fmtNum(r.carga)+'</td>'
+      + '<td style="width:55px;"><input type="text" inputmode="numeric" id="mem-'+r.id+'-dolorEva" value="'+esc(r.dolorEva||'')+'"></td>'
+      + '<td style="width:115px;"><select id="mem-'+r.id+'-cumplimiento">'+cumplOpts+'</select></td>'
+      + '<td style="min-width:170px;"><input type="text" id="mem-'+r.id+'-observaciones" value="'+esc(r.observaciones||'')+'"></td>'
+      + '<td class="no-print"><button class="rmbtn" data-memdel="'+r.id+'" title="Eliminar sesión">✕</button></td>'
+      + '</tr>';
+  }
+  function renderMemoriaTab(){
+    let html = '<div class="rcf-section">'
+      + '<h2>Memoria de sesiones</h2>'
+      + '<p class="sdesc">Revisa y corrige, si hace falta, las sesiones ya guardadas de cualquier jugador — de baja o ya dado de alta. Los cambios se guardan directamente sobre la sesión original.</p>'
+      + '<div class="rcf-filters no-print" style="border-bottom:none;padding-top:0;">'
+      +   '<div class="rcf-filtergroup"><span class="flabel">Estado del jugador</span><div class="rcf-pills">'+memoriaFiltroPillsHtml()+'</div></div>'
+      + '</div>';
+
+    const list = lesionados.filter(l => memoriaFiltro==='baja' ? l.activo : !l.activo)
+      .sort((a,b)=>(a.nombre||a.jugId||'').localeCompare(b.nombre||b.jugId||'', 'es'));
+    html += '<div class="rcf-memoria-playerlist no-print">' + (list.length
+      ? list.map(memoriaPlayerCardHtml).join('')
+      : '<span class="sdesc" style="margin:0;">No hay jugadores '+(memoriaFiltro==='baja'?'de baja':'dados de alta')+' en el seguimiento.</span>') + '</div>';
+
+    if(!state.jugId){
+      html += '<p class="sdesc">Elige un jugador de la lista de arriba para ver y editar sus sesiones guardadas.</p>';
+    } else {
+      const rosterRec = lesionados.find(l=>l.jugId===state.jugId);
+      const records = (registro[state.jugId]||[]).slice().sort((a,b)=> a.fecha < b.fecha ? 1 : -1);
+      html += '<h2 style="margin-top:6px;font-size:14px;">Sesiones de '+esc((rosterRec && rosterRec.nombre) || state.jugNombre || state.jugId)+'</h2>';
+      if(!records.length){
+        html += '<p class="sdesc">Todavía no hay sesiones guardadas para este jugador.</p>';
+      } else {
+        html += '<div style="overflow-x:auto;"><table class="rcf-fichatable">'
+          + '<thead><tr><th>Fecha</th><th>Nº</th><th>Fase</th><th>Objetivo</th><th>Duración</th><th>RPE</th><th>Carga</th><th>Dolor EVA</th><th>Cumplimiento</th><th>Observaciones</th><th class="no-print"></th></tr></thead>'
+          + '<tbody>' + records.map(memoriaRowHtml).join('') + '</tbody>'
+          + '</table></div>';
+      }
+    }
+    html += '</div>';
+    return html;
+  }
+
   let segSelectedIds = null; // Set de ids de lesionados marcados para el informe (null = sin inicializar todavía)
   function ensureSegSelection(){
     if(segSelectedIds === null){
@@ -1427,7 +1509,8 @@
     {id:'ficha', label:'Ficha de sesión'},
     {id:'citas', label:'Calendario semanal'},
     {id:'registro', label:'Registro y carga'},
-    {id:'seguimiento', label:'Seguimiento de lesionados'}
+    {id:'seguimiento', label:'Seguimiento de lesionados'},
+    {id:'memoria', label:'Memoria de sesiones'}
   ];
 
   function render(){
@@ -1436,7 +1519,7 @@
       '<button class="rcf-tab'+(t.id===state.activeTab?' active':'')+'" data-tab="'+t.id+'">'+t.label+'</button>'
     ).join('');
 
-    const showContext = state.activeTab !== 'seguimiento' && state.activeTab !== 'citas';
+    const showContext = state.activeTab !== 'seguimiento' && state.activeTab !== 'citas' && state.activeTab !== 'memoria';
     let body = showContext ? renderContextPanel() : '';
     if(state.activeTab === 'banco'){
       body += sectionsVisible(state.tipoloc).map(renderBankSection).join('');
@@ -1446,6 +1529,8 @@
       body += renderCitasTab();
     } else if(state.activeTab === 'registro'){
       body += renderRegistroTab();
+    } else if(state.activeTab === 'memoria'){
+      body += renderMemoriaTab();
     } else {
       body += renderSeguimientoTab();
     }
@@ -1758,6 +1843,23 @@
     const btnPrintCitas = document.getElementById('btnPrintCitas');
     if(btnPrintCitas) btnPrintCitas.onclick = ()=>{ setTimeout(()=>window.print(), 30); };
 
+    // --- Memoria de sesiones ---
+    document.querySelectorAll('[data-memfiltro]').forEach(el=>el.onclick=()=>{ memoriaFiltro = el.dataset.memfiltro; render(); });
+    document.querySelectorAll('[data-memplayer]').forEach(el=>el.onclick=()=>{
+      const jugId = el.dataset.memplayer;
+      state.jugId = jugId;
+      const rec = lesionados.find(l=>l.jugId===jugId);
+      state.jugNombre = rec ? rec.nombre : '';
+      state.jugCat = rec ? rec.categoria : '';
+      saveDraft(); render();
+    });
+    document.querySelectorAll('[data-memdel]').forEach(el=>el.onclick=()=>{
+      if(!confirm('¿Eliminar definitivamente esta sesión guardada?')) return;
+      const id = el.dataset.memdel;
+      if(registro[state.jugId]) registro[state.jugId] = registro[state.jugId].filter(r=>r.id!==id);
+      saveRegistro(); render();
+    });
+
     const btnG = document.getElementById('btnGuardarRegistro');
     if(btnG) btnG.onclick = ()=>{
       if(!state.jugId){ alert('Introduce el ID del jugador antes de guardar la sesión en el registro.'); return; }
@@ -1825,6 +1927,21 @@
         }
         return;
       }
+      if((m = t.id.match(/^mem-([^-]+)-(fecha|numeroSesion|objetivo|duracion|rpe|dolorEva|observaciones)$/))){
+        const recId=m[1], field=m[2];
+        const rec = (registro[state.jugId]||[]).find(r=>r.id===recId);
+        if(rec){
+          rec[field] = t.value;
+          if(field==='duracion' || field==='rpe'){
+            const carga = (Number(rec.duracion)||0) * (Number(rec.rpe)||0);
+            rec.carga = carga;
+            const el = document.getElementById('memcarga-'+recId);
+            if(el) el.textContent = fmtNum(carga);
+          }
+          debounce('registro', saveRegistro);
+        }
+        return;
+      }
     });
     app.addEventListener('change', (e)=>{
       const t=e.target;
@@ -1833,6 +1950,11 @@
       if((m = t.id.match(/^test-([^-]+)-lado$/))){
         const item = (sesion.test||[]).find(x=>x.rowId===m[1]);
         if(item){ item.lado = t.value; saveDraft(); }
+      }
+      if((m = t.id.match(/^mem-([^-]+)-(fase|cumplimiento)$/))){
+        const recId=m[1], field=m[2];
+        const rec = (registro[state.jugId]||[]).find(r=>r.id===recId);
+        if(rec){ rec[field] = field==='fase' ? Number(t.value) : t.value; saveRegistro(); }
       }
     });
   }
