@@ -6,6 +6,8 @@
 <title>Readaptación de Lesiones · Racing Club Ferrol</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
 <style>
   html,body{margin:0;padding:0;background:#F7F5EF;}
   body{padding:18px 12px 40px;}
@@ -398,6 +400,25 @@
   let sesion = {calentamiento:[], gym:[], campo:[], vuelta:[], test:[]};
   let lesionados = [];       // roster de jugadores de baja (seguimiento global)
   let informeMeta = {fecha: todayISO(), micro:''};
+  // Hoja "Informe de lesiones - RCF (respuestas)" pre-configurada: no requiere tocar el Sheets
+  // (ni Apps Script ni "Publicar en la web"), solo que siga compartida como "Cualquiera con el enlace".
+  const RCF_SHEET_ID = '1oEmE3Gn91_LIJgVH3BEDBZai2Ss61g13Qrarqd6iewU';
+  const RCF_SHEET_TAB = 'Respuestas de formulario 1';
+  const RCF_SHEET_DEFAULT_URLS = [
+    'https://docs.google.com/spreadsheets/d/'+RCF_SHEET_ID+'/gviz/tq?tqx=out:csv&sheet='+encodeURIComponent(RCF_SHEET_TAB),
+    'https://docs.google.com/spreadsheets/d/'+RCF_SHEET_ID+'/export?format=csv'
+  ];
+  let sheetSyncUrl = RCF_SHEET_DEFAULT_URLS[0];
+  let lastSyncAt = null;
+  let sheetSyncStatus = ''; // '', 'loading', 'ok', 'error'
+  let sheetSyncMessage = '';
+  let firebaseConfigStr = '';
+  let firebaseCollection = 'lesionados_rcf';
+  let fbSyncStatus = ''; // '', 'connecting', 'ok', 'error'
+  let fbSyncMessage = '';
+  let fbLastEventAt = null;
+  let fbUnsubscribe = null;
+  let fbAppRef = null;
   let rosterFormOpen = false, rosterMoreOpen = false, editingRosterId = null, rosterDraft = null, showArchivedRoster = false;
   let citas = [];
   let citaFormOpen = false, editingCitaId = null, citaDraft = null;
@@ -502,6 +523,14 @@
       if(c) citas = JSON.parse(c) || [];
     }catch(e){}
     try{
+      const su = await stGet('rcf-readapt-sheeturl', true);
+      if(su) sheetSyncUrl = su;
+    }catch(e){}
+    try{
+      const fc = await stGet('rcf-readapt-firebaseconfig', true);
+      if(fc){ const d = JSON.parse(fc); firebaseConfigStr = d.configStr||''; firebaseCollection = d.collection||'lesionados_rcf'; }
+    }catch(e){}
+    try{
       const d = await stGet('rcf-readapt-draft', false);
       if(d){
         const parsed = JSON.parse(d);
@@ -510,13 +539,223 @@
       }
     }catch(e){}
     render();
+    if(sheetSyncUrl){ syncFromSheet(false); }
+    if(firebaseConfigStr){ connectFirebase(); }
+    setInterval(()=>{ if(sheetSyncUrl && !firebaseConfigStr) syncFromSheet(false); }, 2*60*1000);
+    document.addEventListener('visibilitychange', ()=>{
+      if(!document.hidden && sheetSyncUrl && !firebaseConfigStr) syncFromSheet(false);
+    });
   }
   function saveBanco(){ stSet('rcf-readapt-banco', JSON.stringify({overrides:bankOverrides, customs:bankCustoms}), true); }
   function saveRegistro(){ stSet('rcf-readapt-registro', JSON.stringify(registro), true); }
   function saveJugadores(){ stSet('rcf-readapt-jugadores', JSON.stringify(jugadores), true); }
   function saveLesionados(){ stSet('rcf-readapt-lesionados', JSON.stringify({lista:lesionados, fecha:informeMeta.fecha, micro:informeMeta.micro}), true); }
   function saveCitas(){ stSet('rcf-readapt-citas', JSON.stringify(citas), true); }
+  function saveFirebaseConfig(){ stSet('rcf-readapt-firebaseconfig', JSON.stringify({configStr:firebaseConfigStr, collection:firebaseCollection}), true); }
+
+  // ================= SINCRONIZACIÓN CON GOOGLE SHEETS =================
+  // Lee un enlace CSV publicado (Archivo > Compartir > Publicar en la web > formato CSV)
+  // del formulario "Informe de lesiones - RCF" y añade/actualiza jugadores en el seguimiento.
+  function normalizeHeader(s){
+    return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+  }
+  const SHEET_FIELD_MAP = [
+    {key:'jugId', aliases:['id de jugador','id jugador']},
+    {key:'nombre', aliases:['nombre y apellido','nombre']},
+    {key:'fechaLesion', aliases:['fecha lesion']},
+    {key:'temporada', aliases:['temporada']},
+    {key:'diagnostico', aliases:['diagnostico medico readt fisio','diagnostico']},
+    {key:'localizacion', aliases:['localizacion']},
+    {key:'lateralidad', aliases:['lateralidad']},
+    {key:'tipologia', aliases:['tipologia']},
+    {key:'mecanismo', aliases:['mecanismo de lesion','mecanismo']},
+    {key:'reincidencia', aliases:['reicidiva','reincidencia']},
+    {key:'contexto', aliases:['contexto']},
+    {key:'severidad', aliases:['severidad']},
+    {key:'categoria', aliases:['equipo']},
+    {key:'pronostico', aliases:['pronostico']},
+    {key:'posicion', aliases:['posicion']},
+    {key:'superficie', aliases:['superficie']},
+    {key:'comoSeProdujo', aliases:['como se produjo la lesion']}
+  ];
+  function buildSheetHeaderMap(headerRow){
+    const map = {};
+    headerRow.forEach((h, idx)=>{
+      const norm = normalizeHeader(h);
+      if(!norm) return;
+      const found = SHEET_FIELD_MAP.find(f => f.aliases.some(a => norm===a || norm.indexOf(a)!==-1));
+      if(found) map[idx] = found.key;
+    });
+    return map;
+  }
+  function parseSheetDate(raw){
+    if(!raw) return '';
+    const m = String(raw).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if(!m) return '';
+    return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  }
+  function parseCSV(text){
+    const rows = []; let row = [], field = '', inQuotes = false;
+    for(let i=0;i<text.length;i++){
+      const c = text[i];
+      if(inQuotes){
+        if(c === '"'){ if(text[i+1] === '"'){ field += '"'; i++; } else { inQuotes = false; } }
+        else { field += c; }
+      } else {
+        if(c === '"'){ inQuotes = true; }
+        else if(c === ','){ row.push(field); field=''; }
+        else if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+        else if(c === '\r'){ /* ignorado, \n cierra la fila */ }
+        else { field += c; }
+      }
+    }
+    if(field.length || row.length){ row.push(field); rows.push(row); }
+    return rows;
+  }
+  function timeAgo(date){
+    if(!date) return 'nunca sincronizado';
+    const diffMin = Math.round((Date.now()-date.getTime())/60000);
+    if(diffMin < 1) return 'hace un momento';
+    if(diffMin === 1) return 'hace 1 minuto';
+    if(diffMin < 60) return 'hace '+diffMin+' minutos';
+    return 'hace '+Math.round(diffMin/60)+' h';
+  }
+  function mergeLesionadoRecord(rec){
+    // rec: objeto con claves de SHEET_FIELD_MAP ya limpias. Devuelve 'added' | 'updated' | null.
+    if(!rec.jugId && !rec.nombre) return null;
+    const existingIdx = lesionados.findIndex(l => rec.jugId ? l.jugId===rec.jugId : l.nombre===rec.nombre);
+    if(existingIdx !== -1){
+      lesionados[existingIdx] = Object.assign({}, lesionados[existingIdx], rec);
+      return 'updated';
+    }
+    const nuevo = nuevoLesionado();
+    Object.assign(nuevo, rec);
+    nuevo.activo = true;
+    lesionados.push(nuevo);
+    if(segSelectedIds) segSelectedIds.add(nuevo.id);
+    return 'added';
+  }
+  async function fetchCsvFromUrl(url){
+    const res = await fetch(url, {cache:'no-store'});
+    const text = await res.text();
+    if(!res.ok || /^\s*<!DOCTYPE|<html/i.test(text)){
+      throw new Error('respuesta no es CSV');
+    }
+    return text;
+  }
+  async function syncFromSheet(manual){
+    if(!sheetSyncUrl) return;
+    sheetSyncStatus = 'loading';
+    if(manual) render();
+    const usingDefault = sheetSyncUrl === RCF_SHEET_DEFAULT_URLS[0];
+    const candidates = usingDefault ? RCF_SHEET_DEFAULT_URLS : [sheetSyncUrl];
+    try{
+      let text = null;
+      for(const url of candidates){
+        try{ text = await fetchCsvFromUrl(url); break; }
+        catch(e){ /* probar el siguiente candidato */ }
+      }
+      if(text === null){
+        throw new Error('No se ha podido leer la hoja directamente. Comprueba que siga compartida como "Cualquiera con el enlace" (con permiso de Lector), o pega aquí el enlace publicado como respaldo (Archivo → Compartir → Publicar en la web → formato CSV).');
+      }
+      const rows = parseCSV(text).filter(r => r.some(c=>String(c||'').trim()!==''));
+      if(!rows.length) throw new Error('El archivo está vacío.');
+      const headerMap = buildSheetHeaderMap(rows[0]);
+      if(Object.keys(headerMap).length < 3) throw new Error('No se han reconocido las columnas esperadas (ID de jugador, nombre, fecha de lesión…).');
+      let added = 0, updated = 0;
+      rows.slice(1).forEach(r=>{
+        if(!r.some(c=>String(c||'').trim()!=='')) return;
+        const rec = {};
+        Object.keys(headerMap).forEach(idxStr=>{
+          const idx = Number(idxStr); const key = headerMap[idx];
+          let val = String(r[idx]||'').trim();
+          if(key==='fechaLesion') val = parseSheetDate(val);
+          if(val) rec[key] = val;
+        });
+        const result = mergeLesionadoRecord(rec);
+        if(result === 'added') added++; else if(result === 'updated') updated++;
+      });
+      saveLesionados();
+      lastSyncAt = new Date();
+      sheetSyncStatus = 'ok';
+      sheetSyncMessage = (added || updated) ? ('Sincronizado: '+added+' nuevo(s), '+updated+' actualizado(s).') : 'Sincronizado, sin cambios nuevos.';
+    } catch(e){
+      sheetSyncStatus = 'error';
+      sheetSyncMessage = (e && e.message) || 'Error al sincronizar.';
+    }
+    render();
+  }
+
+  // ================= FIREBASE EN TIEMPO REAL =================
+  function parseFirebaseConfig(text){
+    const cfg = {};
+    ['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'].forEach(k=>{
+      const re = new RegExp(k+'\\s*:\\s*["\']([^"\']+)["\']');
+      const m = String(text||'').match(re);
+      if(m) cfg[k] = m[1];
+    });
+    return cfg;
+  }
+  function normalizeFirestoreRow(data){
+    const rec = {};
+    SHEET_FIELD_MAP.forEach(f=>{
+      const v = data[f.key];
+      if(v!==undefined && v!==null && String(v).trim()!=='') rec[f.key] = String(v).trim();
+    });
+    return rec;
+  }
+  function disconnectFirebase(){
+    if(fbUnsubscribe){ try{ fbUnsubscribe(); }catch(e){} fbUnsubscribe = null; }
+    fbSyncStatus = ''; fbSyncMessage = '';
+  }
+  function connectFirebase(){
+    if(typeof firebase === 'undefined'){
+      fbSyncStatus = 'error';
+      fbSyncMessage = 'No se pudo cargar el SDK de Firebase (sin conexión a internet). Vuelve a intentarlo con conexión.';
+      render(); return;
+    }
+    const cfg = parseFirebaseConfig(firebaseConfigStr);
+    if(!cfg.apiKey || !cfg.projectId){
+      fbSyncStatus = 'error';
+      fbSyncMessage = 'Pega el objeto de configuración completo de Firebase (apiKey, projectId…), tal como te lo da la consola de Firebase.';
+      render(); return;
+    }
+    disconnectFirebase();
+    fbSyncStatus = 'connecting';
+    render();
+    try{
+      fbAppRef = firebase.apps && firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(cfg);
+      const db = firebase.firestore(fbAppRef);
+      fbUnsubscribe = db.collection(firebaseCollection || 'lesionados_rcf').onSnapshot(
+        snapshot=>{
+          let added = 0, updated = 0;
+          snapshot.docChanges().forEach(change=>{
+            if(change.type === 'removed') return; // no se elimina automáticamente al seguimiento
+            const rec = normalizeFirestoreRow(change.doc.data() || {});
+            const result = mergeLesionadoRecord(rec);
+            if(result === 'added') added++; else if(result === 'updated') updated++;
+          });
+          if(added || updated) saveLesionados();
+          fbLastEventAt = new Date();
+          fbSyncStatus = 'ok';
+          fbSyncMessage = 'Conectado en tiempo real' + ((added||updated) ? (' · '+added+' nuevo(s), '+updated+' actualizado(s) ahora mismo.') : '.');
+          render();
+        },
+        err=>{
+          fbSyncStatus = 'error';
+          fbSyncMessage = 'Error de Firebase: ' + ((err && err.message) || err);
+          render();
+        }
+      );
+    } catch(e){
+      fbSyncStatus = 'error';
+      fbSyncMessage = 'No se pudo conectar: ' + ((e && e.message) || e);
+      render();
+    }
+  }
+
   function saveDraft(){ stSet('rcf-readapt-draft', JSON.stringify({state, sesion}), false); }
+
 
   // ================= BANCO: helpers =================
   function poolForSection(section){
@@ -1066,6 +1305,39 @@
       + '<div class="rcf-seg-chklist">'+rows+'</div>'
       + '</div>';
   }
+  function sheetSyncPanelHtml(){
+    const dotColor = sheetSyncStatus==='ok' ? 'var(--green-dark)' : sheetSyncStatus==='error' ? 'var(--red)' : sheetSyncStatus==='loading' ? 'var(--amber)' : 'var(--muted)';
+    const dotChar = sheetSyncStatus ? '●' : '○';
+    const disabledByFirebase = !!firebaseConfigStr;
+    return '<div class="rcf-blockmin no-print" style="flex-wrap:wrap;background:#fff;border:1.5px solid var(--line);border-radius:8px;padding:9px 11px;margin-bottom:8px;'+(disabledByFirebase?'opacity:.5;':'')+'">'
+      + '<b class="mono" style="text-transform:uppercase;color:var(--muted);font-size:10.5px;">Lectura automática de "Informe de lesiones - RCF" (cada 2 min)</b>'
+      + '<input type="text" id="sheetCsvUrlInput" '+(disabledByFirebase?'disabled':'')+' placeholder="Enlace CSV" value="'+esc(sheetSyncUrl)+'" style="flex:1;min-width:220px;padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-size:11.5px;">'
+      + '<button class="rcf-editbtn" id="btnSaveSheetUrl" '+(disabledByFirebase?'disabled':'')+' title="Guardar enlace">Guardar</button>'
+      + '<button class="rcf-editbtn" id="btnSyncNow" '+(disabledByFirebase?'disabled':'')+' title="Sincronizar ahora">🔄</button>'
+      + '<span class="mono" style="font-size:10px;color:var(--muted);white-space:nowrap;"><span style="color:'+dotColor+';">'+dotChar+'</span> '+(sheetSyncStatus==='loading'?'sincronizando…':timeAgo(lastSyncAt))+'</span>'
+      + (disabledByFirebase ? '<div style="flex-basis:100%;font-size:11px;color:var(--muted);">Desactivado: hay una conexión en tiempo real con Firebase activa más abajo.</div>' : '')
+      + '<div style="flex-basis:100%;font-size:11px;color:var(--muted);">Lee directamente de la hoja de respuestas del formulario — no modifica nada en Sheets, solo necesita que siga compartida como "Cualquiera con el enlace". Puedes pegar otro enlace CSV si quieres apuntar a otra hoja.</div>'
+      + (sheetSyncMessage && !disabledByFirebase ? '<div style="flex-basis:100%;font-size:11px;color:'+(sheetSyncStatus==='error'?'var(--red-dark)':'var(--muted)')+';">'+esc(sheetSyncMessage)+'</div>' : '')
+      + '</div>';
+  }
+  function firebaseSyncPanelHtml(){
+    const dotColor = fbSyncStatus==='ok' ? 'var(--green-dark)' : fbSyncStatus==='error' ? 'var(--red)' : fbSyncStatus==='connecting' ? 'var(--amber)' : 'var(--muted)';
+    const dotChar = fbSyncStatus ? '●' : '○';
+    const connected = fbSyncStatus === 'ok';
+    return '<div class="rcf-blockmin no-print" style="flex-wrap:wrap;background:#fff;border:1.5px solid var(--line);border-radius:8px;padding:9px 11px;margin-bottom:12px;">'
+      + '<b class="mono" style="text-transform:uppercase;color:var(--muted);font-size:10.5px;">Opcional: tiempo real con Firebase (requiere un script en Sheets)</b>'
+      + '<span class="mono" style="font-size:10px;color:var(--muted);white-space:nowrap;"><span style="color:'+dotColor+';">'+dotChar+'</span> '+(fbSyncStatus==='connecting'?'conectando…':(connected?('en vivo · último evento '+timeAgo(fbLastEventAt)):(fbSyncStatus==='error'?'error':'no conectado')))+'</span>'
+      + '<div style="flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">'
+      +   '<textarea id="firebaseConfigInput" placeholder="Pega aquí el objeto firebaseConfig completo (de la consola de Firebase: apiKey, authDomain, projectId…)" style="flex:1;min-width:260px;min-height:52px;padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">'+esc(firebaseConfigStr)+'</textarea>'
+      + '</div>'
+      + '<div style="flex-basis:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">'
+      +   '<label style="font-size:11px;color:var(--muted);">Colección: <input type="text" id="firebaseCollectionInput" value="'+esc(firebaseCollection)+'" style="width:150px;padding:4px 7px;border:1px solid var(--line);border-radius:6px;font-size:11px;"></label>'
+      +   '<button class="rcf-editbtn" id="btnFirebaseConnect">'+(connected?'Reconectar':'Guardar y conectar')+'</button>'
+      +   (connected ? '<button class="rcf-editbtn" id="btnFirebaseDisconnect">Desconectar</button>' : '')
+      + '</div>'
+      + (fbSyncMessage ? '<div style="flex-basis:100%;font-size:11px;color:'+(fbSyncStatus==='error'?'var(--red-dark)':'var(--muted)')+';margin-top:4px;">'+esc(fbSyncMessage)+'</div>' : '')
+      + '</div>';
+  }
   function renderSeguimientoTab(){
     ensureSegSelection();
     const base = showArchivedRoster ? lesionados.slice() : lesionados.filter(l=>l.activo);
@@ -1077,6 +1349,8 @@
     let html = '<div class="rcf-section rcf-print-landscape">'
       + '<h2>Seguimiento readaptación de lesiones</h2>'
       + '<p class="sdesc">La fase de cada jugador se actualiza sola según la última sesión registrada en «Registro y carga». Los días de baja se calculan en relación a la fecha de hoy. Marca uno o varios jugadores para incluirlos en el informe.</p>'
+      + sheetSyncPanelHtml()
+      + firebaseSyncPanelHtml()
       + '<div class="rcf-datapanel" style="padding:0 0 14px;">'
       +   field('Fecha del informe','inf-fecha',informeMeta.fecha,'','date')
       +   field('Micro','inf-micro',informeMeta.micro,'MC20')
@@ -1360,6 +1634,32 @@
     // --- Seguimiento de lesionados ---
     const btnAddLes = document.getElementById('btnAddLesionado');
     if(btnAddLes) btnAddLes.onclick = ()=>{ openRosterForm(null); render(); };
+    const btnSaveUrl = document.getElementById('btnSaveSheetUrl');
+    if(btnSaveUrl) btnSaveUrl.onclick = ()=>{
+      const el = document.getElementById('sheetCsvUrlInput');
+      sheetSyncUrl = el ? el.value.trim() : '';
+      stSet('rcf-readapt-sheeturl', sheetSyncUrl, true);
+      sheetSyncMessage = ''; sheetSyncStatus = '';
+      if(sheetSyncUrl) syncFromSheet(true); else render();
+    };
+    const btnSyncNow = document.getElementById('btnSyncNow');
+    if(btnSyncNow) btnSyncNow.onclick = ()=> syncFromSheet(true);
+    const btnFbConnect = document.getElementById('btnFirebaseConnect');
+    if(btnFbConnect) btnFbConnect.onclick = ()=>{
+      const cfgEl = document.getElementById('firebaseConfigInput');
+      const colEl = document.getElementById('firebaseCollectionInput');
+      firebaseConfigStr = cfgEl ? cfgEl.value.trim() : '';
+      firebaseCollection = (colEl ? colEl.value.trim() : '') || 'lesionados_rcf';
+      saveFirebaseConfig();
+      if(firebaseConfigStr) connectFirebase(); else { disconnectFirebase(); render(); }
+    };
+    const btnFbDisconnect = document.getElementById('btnFirebaseDisconnect');
+    if(btnFbDisconnect) btnFbDisconnect.onclick = ()=>{
+      disconnectFirebase();
+      firebaseConfigStr = '';
+      saveFirebaseConfig();
+      render();
+    };
     const btnRosSave = document.getElementById('btnRosterSave');
     if(btnRosSave) btnRosSave.onclick = ()=>{
       const rec = readRosterForm();

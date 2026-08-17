@@ -24,7 +24,8 @@ No sustituye el criterio médico ni fisioterapéutico. Es una herramienta de apo
 
 ### Seguimiento de lesionados (informe descargable)
 - Roster de jugadores de baja con los mismos campos que el formulario **"Informe de lesiones - RCF"** (ID, nombre, categoría/equipo, fecha de lesión, diagnóstico, localización, lateralidad, tipología, mecanismo, reincidencia, contexto, severidad, pronóstico, posición, superficie, cómo se produjo). El panel viene precargado con las últimas respuestas de ese formulario (Google Sheets) como punto de partida; en cuanto se guarda cualquier cambio desde la interfaz, esos datos de ejemplo dejan de usarse y prevalece lo guardado.
-- **Selección múltiple para el informe**: una lista de casillas permite marcar uno, varios o todos los jugadores que se quieren incluir en el informe (con botones "Todos" / "Ninguno"), independiente del filtro global de arriba. Al dar de alta un jugador nuevo se marca automáticamente.
+- **Sincronización automática con Google Sheets, sin tocar el documento**: el roster viene ya conectado a la hoja de respuestas del formulario y se actualiza solo cada pocos minutos, sin necesidad de publicar nada ni añadir scripts. Ver *Actualización automática desde Google Sheets* más abajo.
+- **Selección múltiple para el informe**: una lista de casillas permite marcar uno, varios o todos los jugadores que se quieren incluir en el informe (con botones "Todos" / "Ninguno"), independiente del filtro global de arriba. Al dar de alta un jugador nuevo (a mano o por sincronización) se marca automáticamente.
 - **Fase actualizada sola**: se toma de la fase de la última sesión registrada para ese jugador (si no hay sesiones, se usa la fase inicial indicada al darlo de alta en el seguimiento).
 - **Días de baja en vivo**, calculados siempre respecto a hoy.
 - Tabla con el mismo formato que el informe en papel (Cat. · Jugador · Lesión · Días de baja · Fase I–V · RTP · Optimización individual), coloreada por categoría, con nota editable de objetivo/estado bajo la fase actual (con botón para traerla directamente de la última sesión registrada).
@@ -49,6 +50,22 @@ El panel detecta automáticamente dónde se está ejecutando:
 - **Dentro de Claude** (como artefacto): usa el almacenamiento compartido de Claude — todo el cuerpo técnico que abra el panel en Claude ve el mismo banco de ejercicios, el mismo roster de lesionados y el mismo registro de carga.
 - **Como archivo independiente / GitHub Pages**: usa `localStorage` del navegador. Los datos (incluidas las imágenes subidas) quedan guardados **solo en ese dispositivo/navegador**, no se comparten automáticamente entre coordinadores. Si necesitáis un registro compartido de verdad en producción, hay que conectar un backend (por ejemplo, una hoja de Google Sheets vía Apps Script, Firebase, o una pequeña API) — el código está organizado para que sustituir las funciones `stGet`/`stSet` por llamadas a ese backend sea el único cambio necesario.
 - Las imágenes se comprimen y redimensionan en el navegador antes de guardarse (máx. ~900–1100px, JPEG) para no exceder los límites de almacenamiento.
+
+## Actualización automática desde Google Sheets
+
+El panel **ya viene conectado por defecto** a la hoja de respuestas del formulario "Informe de lesiones - RCF" (la de `1oEmE3Gn91_LIJgVH3BEDBZai2Ss61g13Qrarqd6iewU`). No hace falta tocar nada en el Sheets — ni scripts, ni "Publicar en la web", ni ningún cambio en el documento: el panel simplemente lee la pestaña de respuestas aprovechando que ya está compartida como "Cualquiera con el enlace", igual que cuando se abre para consultarla a mano.
+
+- Al abrir el panel, sincroniza automáticamente. Después, sigue comprobando cada 2 minutos mientras esté abierto, y cada vez que vuelves a esa pestaña del navegador.
+- El botón 🔄 (pestaña **Seguimiento de lesionados** → "Lectura automática de Informe de lesiones - RCF") fuerza una comprobación inmediata.
+- Cada jugador se identifica por su **ID (RCF_000)**: si ya existe en el seguimiento se actualiza con los últimos datos del formulario, y si es nuevo se añade automáticamente (y se marca para el informe). Los campos que gestiona el propio panel (fase, nota, si está dado de alta) no se tocan al sincronizar — solo se actualizan los que vienen del formulario.
+- Internamente prueba dos enlaces de lectura de Google (uno principal y uno de respaldo) antes de avisar de un error, así que es tolerante a que uno de los dos falle puntualmente.
+- Si en algún momento queréis apuntar a otra hoja (por ejemplo una copia, o el año que viene), pegad su enlace CSV en el mismo campo y pulsad Guardar — solo necesita que la hoja esté compartida como "Cualquiera con el enlace (Lector)"; si alguna vez ese enlace deja de funcionar, la alternativa sin ambigüedad es publicarla en la web (**Archivo → Compartir → Publicar en la web** → esa pestaña → CSV), que tampoco modifica el documento, solo cambia cómo se puede leer desde fuera.
+
+Esta configuración es compartida: todo el cuerpo técnico que abra el panel (dentro de Claude, o el archivo desplegado en GitHub Pages) lee la misma hoja, sin que nadie tenga que configurar nada la primera vez.
+
+### Opcional y avanzado: tiempo real con Firebase
+
+Si en el futuro queréis que los cambios aparezcan al instante en lugar de cada 2 minutos, el panel incluye también (pestaña Seguimiento → "Opcional: tiempo real con Firebase") una conexión en tiempo real vía Firebase. A diferencia de todo lo anterior, **esto sí requiere añadir un pequeño script dentro del Google Sheets** (Apps Script, con un disparador "al enviar formulario") que empuje cada respuesta nueva a una base de datos Firebase, que el panel escucha en directo. Como esto modifica el documento de Sheets, se ha dejado como algo puramente opcional y desactivado por defecto — la sincronización automática de arriba no lo necesita para nada. Si en algún momento os interesa, preguntad y os paso la guía paso a paso con el script ya escrito.
 
 ## Crear el repositorio en GitHub
 
