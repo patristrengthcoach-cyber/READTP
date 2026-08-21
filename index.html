@@ -469,6 +469,9 @@
     let h = 0; for(let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) % CAT_PALETTE.length; }
     return CAT_PALETTE[Math.abs(h) % CAT_PALETTE.length];
   }
+  function isEditingSomething(){
+    return !!(rosterFormOpen || citaFormOpen || openEdits.size > 0);
+  }
   function nuevoLesionado(){
     return {id:uid(), jugId:'', nombre:'', categoria:'', posicion:'', fechaLesion:todayISO(), temporada:'', diagnostico:'',
       localizacion:'', lateralidad:'', tipologia:'', mecanismo:'', reincidencia:'', contexto:'', severidad:'', pronostico:'', superficie:'', comoSeProdujo:'',
@@ -558,9 +561,9 @@
     render();
     if(sheetSyncUrl){ syncFromSheet(false); }
     if(firebaseConfigStr){ connectFirebase(); }
-    setInterval(()=>{ if(sheetSyncUrl && !firebaseConfigStr) syncFromSheet(false); }, 2*60*1000);
+    setInterval(()=>{ if(sheetSyncUrl && !firebaseConfigStr && !isEditingSomething()) syncFromSheet(false); }, 2*60*1000);
     document.addEventListener('visibilitychange', ()=>{
-      if(!document.hidden && sheetSyncUrl && !firebaseConfigStr) syncFromSheet(false);
+      if(!document.hidden && sheetSyncUrl && !firebaseConfigStr && !isEditingSomething()) syncFromSheet(false);
     });
   }
   function saveBanco(){ stSet('rcf-readapt-banco', JSON.stringify({overrides:bankOverrides, customs:bankCustoms}), true); }
@@ -1140,21 +1143,8 @@
     rosterMoreOpen = false;
   }
   function readRosterForm(){
-    const g = (id,key)=>{ const el=document.getElementById(id); return el ? el.value.trim() : (rosterDraft[key]||''); };
-    const notaEl = document.getElementById('ldr-nota');
-    return {
-      id: editingRosterId || rosterDraft.id || uid(),
-      jugId:g('ldr-jugId','jugId'), nombre:g('ldr-nombre','nombre'), categoria:g('ldr-categoria','categoria'), posicion:g('ldr-posicion','posicion'),
-      fechaLesion:g('ldr-fechaLesion','fechaLesion'), temporada:g('ldr-temporada','temporada'),
-      faseInicial:Number(g('ldr-faseInicial','faseInicial'))||1, reincidencia:g('ldr-reincidencia','reincidencia'),
-      diagnostico:g('ldr-diagnostico','diagnostico'),
-      localizacion:g('ldr-localizacion','localizacion'), lateralidad:g('ldr-lateralidad','lateralidad'), tipologia:g('ldr-tipologia','tipologia'),
-      mecanismo:g('ldr-mecanismo','mecanismo'), contexto:g('ldr-contexto','contexto'), severidad:g('ldr-severidad','severidad'),
-      pronostico:g('ldr-pronostico','pronostico'), superficie:g('ldr-superficie','superficie'),
-      comoSeProdujo:g('ldr-comoSeProdujo','comoSeProdujo'),
-      nota: notaEl ? notaEl.value : (rosterDraft.nota||''),
-      activo: rosterDraft.activo!==false
-    };
+    const id = editingRosterId || (rosterDraft && rosterDraft.id) || uid();
+    return Object.assign({}, rosterDraft, {id, activo: rosterDraft.activo!==false});
   }
   function rosterFormHtml(){
     const d = rosterDraft;
@@ -1209,6 +1199,7 @@
       + '<td style="min-width:170px;">'+esc(r.diagnostico||'—')+'<div class="mono" style="font-size:9.5px;color:var(--muted);margin-top:2px;">'+esc(r.fechaLesion||'')+'</div></td>'
       + '<td class="mono" style="text-align:center;">'+dias+'</td>'
       + cells
+      + '<td style="min-width:110px;">'+esc(r.pronostico||'—')+'</td>'
       + '<td class="no-print" style="white-space:nowrap;">'
       +   '<button class="rcf-editbtn" data-lesedit="'+r.id+'" title="Editar ficha">✎</button> '
       +   '<button class="rcf-editbtn" data-lessession="'+r.id+'" title="Usar objetivo/observaciones de la última sesión">⤓</button> '
@@ -1248,12 +1239,8 @@
     citaFormOpen = true;
   }
   function readCitaForm(){
-    const g = (id)=>{ const el=document.getElementById(id); return el ? el.value.trim() : ''; };
-    return {
-      id: editingCitaId || (citaDraft && citaDraft.id) || uid(),
-      fecha:g('cit-fecha'), hora:g('cit-hora'), jugId:g('cit-jugId'),
-      lugar:g('cit-lugar'), numeroSesion:g('cit-numeroSesion'), notas:g('cit-notas')
-    };
+    const id = editingCitaId || (citaDraft && citaDraft.id) || uid();
+    return Object.assign({}, citaDraft, {id});
   }
   function citaFormHtml(){
     const d = citaDraft;
@@ -1392,13 +1379,11 @@
     const dotChar = sheetSyncStatus ? '●' : '○';
     const disabledByFirebase = !!firebaseConfigStr;
     return '<div class="rcf-blockmin no-print" style="flex-wrap:wrap;background:#fff;border:1.5px solid var(--line);border-radius:8px;padding:9px 11px;margin-bottom:8px;'+(disabledByFirebase?'opacity:.5;':'')+'">'
-      + '<b class="mono" style="text-transform:uppercase;color:var(--muted);font-size:10.5px;">Lectura automática de "Informe de lesiones - RCF" (cada 2 min)</b>'
+      + '<b class="mono" style="text-transform:uppercase;color:var(--muted);font-size:10.5px;">Informe de lesiones - RCF</b>'
       + '<input type="text" id="sheetCsvUrlInput" '+(disabledByFirebase?'disabled':'')+' placeholder="Enlace CSV" value="'+esc(sheetSyncUrl)+'" style="flex:1;min-width:220px;padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-size:11.5px;">'
       + '<button class="rcf-editbtn" id="btnSaveSheetUrl" '+(disabledByFirebase?'disabled':'')+' title="Guardar enlace">Guardar</button>'
       + '<button class="rcf-editbtn" id="btnSyncNow" '+(disabledByFirebase?'disabled':'')+' title="Sincronizar ahora">🔄</button>'
       + '<span class="mono" style="font-size:10px;color:var(--muted);white-space:nowrap;"><span style="color:'+dotColor+';">'+dotChar+'</span> '+(sheetSyncStatus==='loading'?'sincronizando…':timeAgo(lastSyncAt))+'</span>'
-      + (disabledByFirebase ? '<div style="flex-basis:100%;font-size:11px;color:var(--muted);">Desactivado: hay una conexión en tiempo real con Firebase activa más abajo.</div>' : '')
-      + '<div style="flex-basis:100%;font-size:11px;color:var(--muted);">Lee directamente de la hoja de respuestas del formulario — no modifica nada en Sheets, solo necesita que siga compartida como "Cualquiera con el enlace". Puedes pegar otro enlace CSV si quieres apuntar a otra hoja.</div>'
       + (sheetSyncMessage && !disabledByFirebase ? '<div style="flex-basis:100%;font-size:11px;color:'+(sheetSyncStatus==='error'?'var(--red-dark)':'var(--muted)')+';">'+esc(sheetSyncMessage)+'</div>' : '')
       + '</div>';
   }
@@ -1407,7 +1392,7 @@
     const dotChar = fbSyncStatus ? '●' : '○';
     const connected = fbSyncStatus === 'ok';
     return '<div class="rcf-blockmin no-print" style="flex-wrap:wrap;background:#fff;border:1.5px solid var(--line);border-radius:8px;padding:9px 11px;margin-bottom:12px;">'
-      + '<b class="mono" style="text-transform:uppercase;color:var(--muted);font-size:10.5px;">Opcional: tiempo real con Firebase (requiere un script en Sheets)</b>'
+      + '<b class="mono" style="text-transform:uppercase;color:var(--muted);font-size:10.5px;">Opcional: tiempo real con Firebase</b>'
       + '<span class="mono" style="font-size:10px;color:var(--muted);white-space:nowrap;"><span style="color:'+dotColor+';">'+dotChar+'</span> '+(fbSyncStatus==='connecting'?'conectando…':(connected?('en vivo · último evento '+timeAgo(fbLastEventAt)):(fbSyncStatus==='error'?'error':'no conectado')))+'</span>'
       + '<div style="flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">'
       +   '<textarea id="firebaseConfigInput" placeholder="Pega aquí el objeto firebaseConfig completo (de la consola de Firebase: apiKey, authDomain, projectId…)" style="flex:1;min-width:260px;min-height:52px;padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">'+esc(firebaseConfigStr)+'</textarea>'
@@ -1426,11 +1411,11 @@
     const list = base.filter(l=>segSelectedIds.has(l.id));
     const rows = list.length ? list.map(seguimientoRowHtml).join('')
       : (lesionados.length
-          ? '<tr class="rcf-emptyrow"><td colspan="12">No hay jugadores seleccionados para el informe. Marca al menos uno en la lista de arriba.</td></tr>'
-          : '<tr class="rcf-emptyrow"><td colspan="12">No hay jugadores en seguimiento todavía. Añade uno con el botón de abajo.</td></tr>');
+          ? '<tr class="rcf-emptyrow"><td colspan="13">No hay jugadores seleccionados para el informe. Marca al menos uno en la lista de arriba.</td></tr>'
+          : '<tr class="rcf-emptyrow"><td colspan="13">No hay jugadores en seguimiento todavía. Añade uno con el botón de abajo.</td></tr>');
     let html = '<div class="rcf-section rcf-print-landscape">'
       + '<h2>Seguimiento readaptación de lesiones</h2>'
-      + '<p class="sdesc">La fase de cada jugador se actualiza sola según la última sesión registrada en «Registro y carga». Los días de baja se calculan en relación a la fecha de hoy. Marca uno o varios jugadores para incluirlos en el informe.</p>'
+      + '<p class="sdesc">Marca uno o varios jugadores para incluirlos en el informe.</p>'
       + sheetSyncPanelHtml()
       + firebaseSyncPanelHtml()
       + '<div class="rcf-datapanel" style="padding:0 0 14px;">'
@@ -1447,6 +1432,7 @@
     html += '<div style="overflow-x:auto;margin-top:12px;"><table class="rcf-fichatable">'
       + '<thead><tr><th>Cat.</th><th>Jugador</th><th>Lesión</th><th>Días de baja</th>'
       + FASES.map(f=>'<th style="min-width:170px;">'+PHASE_COL_TITLE[f.id]+'</th>').join('')
+      + '<th style="min-width:110px;">Pronóstico</th>'
       + '<th class="no-print"></th></tr></thead>'
       + '<tbody>'+rows+'</tbody></table></div>'
       + '<p style="font-size:10.5px;color:var(--muted);margin-top:10px;">Herramienta de apoyo al seguimiento; las decisiones clínicas de alta y de progresión de fase son siempre del cuerpo médico.</p>'
@@ -1760,7 +1746,7 @@
     const btnRosCancel = document.getElementById('btnRosterCancel');
     if(btnRosCancel) btnRosCancel.onclick = ()=>{ rosterFormOpen=false; editingRosterId=null; rosterDraft=null; render(); };
     const btnMasDatos = document.getElementById('btnToggleMasDatos');
-    if(btnMasDatos) btnMasDatos.onclick = ()=>{ rosterDraft = readRosterForm(); rosterMoreOpen = !rosterMoreOpen; render(); };
+    if(btnMasDatos) btnMasDatos.onclick = ()=>{ rosterMoreOpen = !rosterMoreOpen; render(); };
     const chkArch = document.getElementById('chkShowArchived');
     if(chkArch) chkArch.onchange = ()=>{ showArchivedRoster = chkArch.checked; render(); };
     document.querySelectorAll('[data-segchk]').forEach(el=>el.onchange=()=>{
@@ -1942,6 +1928,14 @@
         }
         return;
       }
+      if((m = t.id.match(/^ldr-(jugId|nombre|categoria|posicion|fechaLesion|temporada|reincidencia|diagnostico|localizacion|lateralidad|tipologia|mecanismo|contexto|severidad|pronostico|superficie|comoSeProdujo|nota)$/))){
+        if(rosterDraft) rosterDraft[m[1]] = t.value;
+        return;
+      }
+      if((m = t.id.match(/^cit-(fecha|hora|numeroSesion|notas)$/))){
+        if(citaDraft) citaDraft[m[1]] = t.value;
+        return;
+      }
     });
     app.addEventListener('change', (e)=>{
       const t=e.target;
@@ -1956,6 +1950,9 @@
         const rec = (registro[state.jugId]||[]).find(r=>r.id===recId);
         if(rec){ rec[field] = field==='fase' ? Number(t.value) : t.value; saveRegistro(); }
       }
+      if(t.id==='ldr-faseInicial'){ if(rosterDraft) rosterDraft.faseInicial = Number(t.value)||1; }
+      if(t.id==='cit-jugId'){ if(citaDraft) citaDraft.jugId = t.value; }
+      if(t.id==='cit-lugar'){ if(citaDraft) citaDraft.lugar = t.value; }
     });
   }
 

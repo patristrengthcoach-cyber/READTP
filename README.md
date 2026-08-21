@@ -28,7 +28,7 @@ No sustituye el criterio médico ni fisioterapéutico. Es una herramienta de apo
 - **Selección múltiple para el informe**: una lista de casillas permite marcar uno, varios o todos los jugadores que se quieren incluir en el informe (con botones "Todos" / "Ninguno"), independiente del filtro global de arriba. Al dar de alta un jugador nuevo (a mano o por sincronización) se marca automáticamente.
 - **Fase actualizada sola**: se toma de la fase de la última sesión registrada para ese jugador (si no hay sesiones, se usa la fase inicial indicada al darlo de alta en el seguimiento).
 - **Días de baja en vivo**, calculados siempre respecto a hoy.
-- Tabla con el mismo formato que el informe en papel (Cat. · Jugador · Lesión · Días de baja · Fase I–V · RTP · Optimización individual), coloreada por categoría, con nota editable de objetivo/estado bajo la fase actual (con botón para traerla directamente de la última sesión registrada).
+- Tabla con el mismo formato que el informe en papel (Cat. · Jugador · Lesión · Días de baja · Fase I–V · RTP · Optimización individual · Pronóstico), coloreada por categoría, con nota editable de objetivo/estado bajo la fase actual (con botón para traerla directamente de la última sesión registrada). Pensada también para descargar y compartir con el director deportivo del club.
 - Botón **Descargar informe** (imprime/exporta a PDF en A4 apaisado) para repartir al staff; jugadores dados de alta se pueden archivar sin perder el histórico.
 
 ### Calendario semanal de citas
