@@ -278,8 +278,12 @@
   .rcf-print-landscape table.rcf-fichatable td:nth-child(n+5):nth-child(-n+11){ width:9%; }
   .rcf-print-landscape table.rcf-fichatable th:nth-child(12),
   .rcf-print-landscape table.rcf-fichatable td:nth-child(12){ width:8%; }
-  .rcf-print-landscape table.rcf-fichatable textarea{
-    font-size:7.5px !important; min-height:0 !important; padding:2px 3px !important; border:none !important; resize:none;
+  .rcf-print-landscape table.rcf-fichatable textarea,
+  .rcf-print-landscape table.rcf-fichatable input,
+  .rcf-print-landscape table.rcf-fichatable select{
+    display:block; width:100% !important; max-width:100% !important; box-sizing:border-box !important;
+    font-size:7.5px !important; line-height:1.25; min-height:0 !important; height:auto !important;
+    padding:2px 3px !important; border:none !important; resize:none; overflow-wrap:break-word; word-break:break-word;
   }
 }
 .print-only{display:none;}
@@ -1437,7 +1441,7 @@
     const rows = list.length ? list.map(seguimientoRowHtml).join('')
       : (lesionados.length
           ? '<tr class="rcf-emptyrow"><td colspan="13">No hay jugadores seleccionados para el informe. Marca al menos uno en la lista de arriba.</td></tr>'
-          : '<tr class="rcf-emptyrow"><td colspan="13">No hay jugadores en seguimiento todavía. Añade uno con el botón de abajo.</td></tr>');
+          : '<tr class="rcf-emptyrow"><td colspan="13">No hay jugadores en seguimiento todavía. Se añadirán solos al sincronizar con el formulario de Google Sheets.</td></tr>');
     let html = '<div class="rcf-section rcf-print-landscape">'
       + '<h2>Seguimiento readaptación de lesiones</h2>'
       + '<p class="sdesc">Marca uno o varios jugadores para incluirlos en el informe.</p>'
@@ -1449,7 +1453,6 @@
       + '</div>'
       + '<div class="rcf-hactions no-print" style="padding:0 0 10px;flex-wrap:wrap;">'
       +   '<button class="rcf-btn primary" id="btnPrintSeguimiento" style="background:var(--navy);border-color:var(--navy);color:#fff;">🖶 Descargar informe</button>'
-      +   '<button class="rcf-btn" id="btnAddLesionado" style="border-color:var(--line);color:var(--ink);background:#fff;">+ Añadir jugador de baja</button>'
       + '</div>'
       + segChecklistHtml();
     if(rosterFormOpen) html += rosterFormHtml();
@@ -1728,8 +1731,6 @@
     if(regSesSel) regSesSel.onchange = ()=>{ state.regSesSel = regSesSel.value; render(); };
 
     // --- Seguimiento de lesionados ---
-    const btnAddLes = document.getElementById('btnAddLesionado');
-    if(btnAddLes) btnAddLes.onclick = ()=>{ openRosterForm(null); render(); };
     const btnSaveUrl = document.getElementById('btnSaveSheetUrl');
     if(btnSaveUrl) btnSaveUrl.onclick = ()=>{
       const el = document.getElementById('sheetCsvUrlInput');
