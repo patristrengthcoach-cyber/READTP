@@ -258,6 +258,9 @@
   .print-only{display:block !important;}
 
   /* Informe de seguimiento: fuerza que las 12 columnas quepan en el ancho de la hoja */
+  .rcf-print-landscape{
+    break-inside:auto !important; page-break-inside:auto !important;
+  }
   .rcf-print-landscape table.rcf-fichatable{
     table-layout:fixed; width:100%;
   }
@@ -289,6 +292,8 @@
     font-size:7.5px !important; line-height:1.3; white-space:pre-wrap;
     word-break:break-word; overflow-wrap:break-word; padding:2px 3px;
   }
+  .rcf-print-landscape table.rcf-fichatable thead{ display:table-header-group; }
+  .rcf-print-landscape table.rcf-fichatable tr{ break-inside:avoid; page-break-inside:avoid; }
 }
 .print-only{display:none;}
 </style>
