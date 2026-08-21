@@ -285,6 +285,10 @@
     font-size:7.5px !important; line-height:1.25; min-height:0 !important; height:auto !important;
     padding:2px 3px !important; border:none !important; resize:none; overflow-wrap:break-word; word-break:break-word;
   }
+  .rcf-print-landscape .rcf-lesnota-print{
+    font-size:7.5px !important; line-height:1.3; white-space:pre-wrap;
+    word-break:break-word; overflow-wrap:break-word; padding:2px 3px;
+  }
 }
 .print-only{display:none;}
 </style>
@@ -1220,7 +1224,10 @@
     const cells = FASES.map(f=>{
       if(f.id !== fase) return '<td style="background:#fff;"></td>';
       const bg = f.id===6 ? '#FBE1E4' : (f.id===7 ? '#DCEEE3' : '#fff');
-      return '<td style="background:'+bg+';min-width:190px;"><textarea class="rcf-fichatable-nota" rows="3" id="lesnota-'+r.id+'" placeholder="Nota / objetivo del entreno…">'+esc(r.nota)+'</textarea></td>';
+      return '<td style="background:'+bg+';min-width:190px;">'
+        + '<textarea class="rcf-fichatable-nota no-print" rows="3" id="lesnota-'+r.id+'" placeholder="Nota / objetivo del entreno…">'+esc(r.nota)+'</textarea>'
+        + '<div class="print-only rcf-lesnota-print">'+esc(r.nota)+'</div>'
+        + '</td>';
     }).join('');
     return '<tr style="background:'+color.bg+';'+(r.activo?'':'opacity:.6;')+'">'
       + '<td style="font-weight:600;color:'+color.text+';white-space:nowrap;">'+esc(r.categoria||'—')+'</td>'
@@ -1444,10 +1451,10 @@
           : '<tr class="rcf-emptyrow"><td colspan="13">No hay jugadores en seguimiento todavía. Se añadirán solos al sincronizar con el formulario de Google Sheets.</td></tr>');
     let html = '<div class="rcf-section rcf-print-landscape">'
       + '<h2>Seguimiento readaptación de lesiones</h2>'
-      + '<p class="sdesc">Marca uno o varios jugadores para incluirlos en el informe.</p>'
+      + '<p class="sdesc no-print">Marca uno o varios jugadores para incluirlos en el informe.</p>'
       + sheetSyncPanelHtml()
       + firebaseSyncPanelHtml()
-      + '<div class="rcf-datapanel" style="padding:0 0 14px;">'
+      + '<div class="rcf-datapanel no-print" style="padding:0 0 14px;">'
       +   field('Fecha del informe','inf-fecha',informeMeta.fecha,'','date')
       +   field('Micro','inf-micro',informeMeta.micro,'MC20')
       + '</div>'
@@ -1913,7 +1920,12 @@
       }
       if((m = t.id.match(/^lesnota-(.+)$/))){
         const rec = lesionados.find(l=>l.id===m[1]);
-        if(rec){ rec.nota = t.value; debounce('lesionados', saveLesionados); }
+        if(rec){
+          rec.nota = t.value;
+          const printEl = t.parentElement ? t.parentElement.querySelector('.rcf-lesnota-print') : null;
+          if(printEl) printEl.textContent = t.value;
+          debounce('lesionados', saveLesionados);
+        }
         return;
       }
       if(t.id==='inf-fecha'){ informeMeta.fecha=t.value; debounce('lesionados', saveLesionados); return; }
