@@ -256,6 +256,31 @@
   .rcf-card{break-inside:avoid;}
   .rcf-section{break-inside:avoid; padding:10px 20px;}
   .print-only{display:block !important;}
+
+  /* Informe de seguimiento: fuerza que las 12 columnas quepan en el ancho de la hoja */
+  .rcf-print-landscape table.rcf-fichatable{
+    table-layout:fixed; width:100%;
+  }
+  .rcf-print-landscape table.rcf-fichatable th,
+  .rcf-print-landscape table.rcf-fichatable td{
+    min-width:0 !important; width:auto; font-size:7.5px !important; line-height:1.25;
+    padding:3px 4px !important; word-break:break-word; overflow-wrap:break-word; white-space:normal !important;
+  }
+  .rcf-print-landscape table.rcf-fichatable th:nth-child(1),
+  .rcf-print-landscape table.rcf-fichatable td:nth-child(1){ width:5%; }
+  .rcf-print-landscape table.rcf-fichatable th:nth-child(2),
+  .rcf-print-landscape table.rcf-fichatable td:nth-child(2){ width:9%; }
+  .rcf-print-landscape table.rcf-fichatable th:nth-child(3),
+  .rcf-print-landscape table.rcf-fichatable td:nth-child(3){ width:10%; }
+  .rcf-print-landscape table.rcf-fichatable th:nth-child(4),
+  .rcf-print-landscape table.rcf-fichatable td:nth-child(4){ width:5%; text-align:center; }
+  .rcf-print-landscape table.rcf-fichatable th:nth-child(n+5):nth-child(-n+11),
+  .rcf-print-landscape table.rcf-fichatable td:nth-child(n+5):nth-child(-n+11){ width:9%; }
+  .rcf-print-landscape table.rcf-fichatable th:nth-child(12),
+  .rcf-print-landscape table.rcf-fichatable td:nth-child(12){ width:8%; }
+  .rcf-print-landscape table.rcf-fichatable textarea{
+    font-size:7.5px !important; min-height:0 !important; padding:2px 3px !important; border:none !important; resize:none;
+  }
 }
 .print-only{display:none;}
 </style>
