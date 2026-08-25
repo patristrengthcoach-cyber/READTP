@@ -8,9 +8,9 @@ No sustituye el criterio médico ni fisioterapéutico. Es una herramienta de apo
 
 ## Qué incluye
 
-### Diseño de sesión
-- **Filtro global de jugador**: en la parte superior de la página (visible en todas las pestañas) hay un selector con los jugadores de baja actuales (nombre + ID + categoría, tomados de la pestaña de seguimiento). Elegir uno filtra automáticamente el diseño de sesión, la ficha, el registro de carga y el seguimiento por ese jugador; no hace falta volver a escribir su ID en cada pestaña.
-- **Banco de ejercicios** (pestaña **Diseño de sesión**) organizado en 4 bloques — Calentamiento/activación, Bloque principal · Gimnasio, Bloque principal · Campo, Vuelta a la calma — filtrado automáticamente por la **fase RTP** seleccionada (Fase 1 Aproximación → Fase 7 Optimización individual). Cada ejercicio es una tarjeta editable con material, series, repeticiones, carga/intensidad, RPE, descanso, notas/precauciones, y **vídeo (YouTube) y/o imagen/GIF propios** (se puede subir una foto del ejercicio igual que en el Excel). Se pueden añadir ejercicios propios.
+### Ficha de sesión
+- **Filtro global de jugador**: en la parte superior de la página (visible en todas las pestañas) hay un selector con los jugadores de baja actuales (nombre + ID + categoría, tomados del seguimiento). Elegir uno filtra automáticamente la ficha, el registro de carga y el seguimiento por ese jugador, y muestra directamente **su última sesión guardada** (número, fecha y fase) — nunca la de otro jugador. Los jugadores dados de alta no aparecen en este selector (ver más abajo).
+- **Añadir ejercicios directamente en la ficha**: cada bloque (Calentamiento, Gimnasio, Campo, Vuelta a la calma) tiene un botón **"+ Añadir ejercicio"** que crea una fila en blanco para rellenar sobre la marcha — nombre, series, repeticiones, carga/intensidad, RPE, descanso y notas, todo editable en línea. Al escribir un nombre ya conocido (autocompletar) se rellenan solas las dosis habituales de ese ejercicio como punto de partida. Sin tarjetas, sin vídeos ni imágenes de ejercicio — solo texto rápido de editar.
 - **Selector de ubicación**: Solo gimnasio / Gimnasio + campo / Solo campo.
 - **Títulos de cada bloque editables**: los encabezados de la ficha (Calentamiento, Gimnasio, Campo, Vuelta a la calma, Test) se pueden renombrar directamente sobre la propia ficha.
 - **Imagen de la tarea de campo**: cuando la sesión incluye bloque de campo, se puede subir una imagen/diagrama de la tarea (aparece también en la ficha impresa).
@@ -20,13 +20,14 @@ No sustituye el criterio médico ni fisioterapéutico. Es una herramienta de apo
 
 ### Registro y carga
 - Guarda cada sesión ejecutada por jugador (incluye nº de sesión, objetivo, tests) y calcula **carga aguda (7 días)**, **carga crónica (media semanal de 4 semanas)**, **ACWR**, **monotonía** y **strain**, con el mismo criterio del Excel (ACWR 0.8–1.3 óptimo, >1.5 riesgo alto), más un mini-gráfico de carga diaria.
-- El jugador se elige desde el **filtro global** de arriba; dentro de la pestaña se puede elegir además una **sesión concreta** por su número para ver su detalle completo (objetivo, observaciones, tests) sin perder la vista agregada.
+- El jugador se elige desde el **filtro global** de arriba; al seleccionarlo se abre automáticamente el detalle de su sesión más reciente (objetivo, observaciones, tests), y desde ahí se puede volver a la vista agregada o elegir cualquier otra sesión concreta por su número.
 
 ### Seguimiento de lesionados (informe descargable)
 - Roster de jugadores de baja con los mismos campos que el formulario **"Informe de lesiones - RCF"** (ID, nombre, categoría/equipo, fecha de lesión, diagnóstico, localización, lateralidad, tipología, mecanismo, reincidencia, contexto, severidad, pronóstico, posición, superficie, cómo se produjo). El panel viene precargado con las últimas respuestas de ese formulario (Google Sheets) como punto de partida; en cuanto se guarda cualquier cambio desde la interfaz, esos datos de ejemplo dejan de usarse y prevalece lo guardado.
-- **Los jugadores nuevos se añaden solo desde el formulario de Google Sheets** (sincronización automática); el panel ya no tiene botón para dar de alta a un jugador nuevo, para evitar duplicados entre el Excel y el panel. Sí se puede seguir editando, corrigiendo datos, marcando "de alta" o eliminando a los jugadores que ya están en el seguimiento.
+- **Los jugadores nuevos se añaden solo desde el formulario de Google Sheets** (sincronización automática); el panel no tiene botón para dar de alta a un jugador nuevo, para evitar duplicados entre el Excel y el panel. Sí se puede seguir editando, corrigiendo datos o eliminando a los jugadores que ya están en el seguimiento.
+- **Casilla "Alta"**: marca a un jugador como dado de alta directamente desde el panel. En cuanto se marca, **deja de aparecer en los selectores de jugador** (filtro global, calendario de citas) hasta que llegue una **respuesta nueva** del formulario de Excel para ese mismo ID (se detecta por la marca temporal de la respuesta) — entonces vuelve a activarse solo. Sigue visible en la pestaña Seguimiento marcando "Ver también dados de alta", y siempre accesible desde Memoria de sesiones.
 - **Sincronización automática con Google Sheets, sin tocar el documento**: el roster viene ya conectado a la hoja de respuestas del formulario y se actualiza solo cada pocos minutos, sin necesidad de publicar nada ni añadir scripts. Ver *Actualización automática desde Google Sheets* más abajo.
-- **Selección múltiple para el informe**: una lista de casillas permite marcar uno, varios o todos los jugadores que se quieren incluir en el informe (con botones "Todos" / "Ninguno"), independiente del filtro global de arriba. Al dar de alta un jugador nuevo (a mano o por sincronización) se marca automáticamente.
+- **Selección múltiple para el informe**: una lista de casillas permite marcar uno, varios o todos los jugadores que se quieren incluir en el informe (con botones "Todos" / "Ninguno"), independiente del filtro global de arriba. Al llegar un jugador nuevo por sincronización se marca automáticamente.
 - **Fase actualizada sola**: se toma de la fase de la última sesión registrada para ese jugador (si no hay sesiones, se usa la fase inicial indicada al darlo de alta en el seguimiento).
 - **Días de baja en vivo**, calculados siempre respecto a hoy.
 - Tabla con el mismo formato que el informe en papel (Cat. · Jugador · Lesión · Días de baja · Fase I–V · RTP · Optimización individual · Pronóstico), coloreada por categoría, con nota editable de objetivo/estado bajo la fase actual (con botón para traerla directamente de la última sesión registrada). Pensada también para descargar y compartir con el director deportivo del club.
@@ -34,7 +35,7 @@ No sustituye el criterio médico ni fisioterapéutico. Es una herramienta de apo
 
 ### Calendario semanal de citas
 - Pestaña con una vista semanal (lunes a domingo) para anotar la **hora a la que se cita a cada jugador** a su sesión de readaptación — como una agenda semanal de readaptación.
-- Cada cita tiene fecha, hora, jugador (elegido del seguimiento), lugar (gimnasio / campo / gimnasio + campo / clínica-fisio), nº de sesión opcional y notas.
+- Cada cita tiene fecha, hora, jugador (elegido del seguimiento; solo aparecen los jugadores activos), lugar (gimnasio / campo / gimnasio + campo / clínica-fisio), nº de sesión opcional y notas.
 - Navegación semana anterior / siguiente / hoy, botón "+ cita" tanto general como por día concreto, y **Descargar semana** para imprimir/exportar la agenda en A4 apaisado.
 
 ### Memoria de sesiones
@@ -54,7 +55,7 @@ No necesita instalación ni servidor: es un único archivo HTML autocontenido.
 
 El panel detecta automáticamente dónde se está ejecutando:
 
-- **Dentro de Claude** (como artefacto): usa el almacenamiento compartido de Claude — todo el cuerpo técnico que abra el panel en Claude ve el mismo banco de ejercicios, el mismo roster de lesionados y el mismo registro de carga.
+- **Dentro de Claude** (como artefacto): usa el almacenamiento compartido de Claude — todo el cuerpo técnico que abra el panel en Claude ve la misma ficha de sesión, el mismo roster de lesionados y el mismo registro de carga.
 - **Como archivo independiente / GitHub Pages**: usa `localStorage` del navegador. Los datos (incluidas las imágenes subidas) quedan guardados **solo en ese dispositivo/navegador**, no se comparten automáticamente entre coordinadores. Si necesitáis un registro compartido de verdad en producción, hay que conectar un backend (por ejemplo, una hoja de Google Sheets vía Apps Script, Firebase, o una pequeña API) — el código está organizado para que sustituir las funciones `stGet`/`stSet` por llamadas a ese backend sea el único cambio necesario.
 - Las imágenes se comprimen y redimensionan en el navegador antes de guardarse (máx. ~900–1100px, JPEG) para no exceder los límites de almacenamiento.
 
@@ -108,9 +109,9 @@ rcf-readaptacion-dashboard/
         └── deploy.yml             # Despliegue automático a GitHub Pages
 ```
 
-## Personalizar el banco de ejercicios
+## Personalizar las sugerencias de ejercicios
 
-El banco inicial (unos 30 ejercicios) está pensado como punto de partida, con la misma estructura que la pestaña *Banco de Ejercicios* del Excel. Para editarlo en bloque en vez de uno a uno desde la interfaz, abre `index.html` y busca el objeto `BANK` dentro del `<script>` (sección `DATOS: BANCO DE EJERCICIOS`); cada ejercicio es un objeto con:
+Al escribir el nombre de un ejercicio en la ficha, aparecen sugerencias (autocompletar) y, si coincide con uno conocido, se rellenan solas sus dosis habituales. Esa lista de sugerencias (unos 30 ejercicios de partida, con la misma estructura que la pestaña *Banco de Ejercicios* del Excel) vive en el objeto `BANK` dentro del `<script>` de `index.html` (sección `DATOS: BANCO DE EJERCICIOS`). Para editarla en bloque, cada ejercicio es un objeto con:
 
 ```js
 {id:'g1', n:'Nombre del ejercicio', mat:'Material', minFase:3,
@@ -118,7 +119,7 @@ El banco inicial (unos 30 ejercicios) está pensado como punto de partida, con l
  rpe:'5', descanso:'90"', note:'Precaución opcional', ev:'Nota de criterio opcional'}
 ```
 
-`minFase` (1–7) controla a partir de qué fase RTP aparece el ejercicio en el banco. Las imágenes subidas desde la interfaz se guardan como overrides (`img`, en base64) y no hace falta tocarlas aquí.
+`minFase` (1–7) controla a partir de qué fase RTP aparece como sugerencia. No hace falta editar nada aquí para usar el día a día — cualquier nombre de ejercicio se puede escribir libremente en la ficha, esté o no en esta lista.
 
 ## Fórmulas utilizadas
 

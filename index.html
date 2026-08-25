@@ -209,6 +209,8 @@
 .rcf-seg-chk{display:flex; align-items:center; gap:5px; font-size:12.5px; cursor:pointer;}
 .rcf-seg-chk .mono{color:var(--muted); font-size:10px;}
 .rcf-seg-chk input{accent-color:var(--navy);}
+.rcf-alta-check{display:inline-flex; align-items:center; gap:3px; font-size:10.5px; color:var(--muted); cursor:pointer; vertical-align:middle;}
+.rcf-alta-check input{accent-color:var(--red);}
 
 /* ===== CALENDARIO SEMANAL ===== */
 .rcf-citas-grid{display:grid; grid-template-columns:repeat(7,minmax(150px,1fr)); gap:8px;}
@@ -316,11 +318,6 @@
   <div class="rcf-tabs no-print" id="tabSelector"></div>
 
   <div id="viewContainer"></div>
-
-  <div class="rcf-storagenote no-print">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-    <span id="storageNote">Los cambios se guardan automáticamente.</span>
-  </div>
 </div>
 
 <script>
@@ -440,7 +437,7 @@
   const SECTION_LABEL_DEFAULTS = {calentamiento:'Calentamiento y activación', gym:'Bloque principal · Gimnasio', campo:'Bloque principal · Campo', vuelta:'Vuelta a la calma', test:'Test y valoraciones físicas'};
   let state = {
     fecha: todayISO(), numeroSesion:'', jugId:'', jugNombre:'', jugCat:'Cadete', fase:4, rpeObjetivo:'5', objetivo:'',
-    tipoloc:'gym_campo', activeTab:'banco',
+    tipoloc:'gym_campo', activeTab:'ficha',
     blockMin: {calentamiento:8, gym:20, campo:15, vuelta:7},
     rpeSesion:'', dolorEva:'0', cumplimiento:'Completo', observaciones:'',
     sectionLabels: Object.assign({}, SECTION_LABEL_DEFAULTS),
@@ -508,12 +505,12 @@
     return CAT_PALETTE[Math.abs(h) % CAT_PALETTE.length];
   }
   function isEditingSomething(){
-    return !!(rosterFormOpen || citaFormOpen || openEdits.size > 0);
+    return !!(rosterFormOpen || citaFormOpen);
   }
   function nuevoLesionado(){
     return {id:uid(), jugId:'', nombre:'', categoria:'', posicion:'', fechaLesion:todayISO(), temporada:'', diagnostico:'',
       localizacion:'', lateralidad:'', tipologia:'', mecanismo:'', reincidencia:'', contexto:'', severidad:'', pronostico:'', superficie:'', comoSeProdujo:'',
-      faseInicial:1, nota:'', activo:true};
+      faseInicial:1, nota:'', activo:true, marcaTemporal:''};
   }
   // Datos de partida importados de "Informe de lesiones - RCF (respuestas)" (Google Sheets).
   // Se cargan una única vez, solo si todavía no existe un registro guardado.
@@ -545,9 +542,6 @@
     return Number(sorted[0].fase)||Number(faseInicial)||1;
   }
 
-  let bankOverrides = {};   // {exId: {n,mat,series,reps,carga,rpe,descanso,note,yt}}
-  let bankCustoms = {};     // {section: [{id,n,mat,series,reps,carga,rpe,descanso,note,yt}]}
-  let openEdits = new Set(); // ids of bank cards with the edit form open
   let registro = {};        // {jugId: [{id,fecha,fase,duracion,rpe,carga,dolorEva,cumplimiento,observaciones}]}
   let jugadores = {};        // {jugId: {nombre, categoria}}  autocompletado
 
@@ -559,10 +553,6 @@
   }
 
   async function loadAll(){
-    try{
-      const b = await stGet('rcf-readapt-banco', true);
-      if(b){ const d = JSON.parse(b); bankOverrides = d.overrides||{}; bankCustoms = d.customs||{}; }
-    }catch(e){}
     try{
       const r = await stGet('rcf-readapt-registro', true);
       if(r) registro = JSON.parse(r) || {};
@@ -604,7 +594,6 @@
       if(!document.hidden && sheetSyncUrl && !firebaseConfigStr && !isEditingSomething()) syncFromSheet(false);
     });
   }
-  function saveBanco(){ stSet('rcf-readapt-banco', JSON.stringify({overrides:bankOverrides, customs:bankCustoms}), true); }
   function saveRegistro(){ stSet('rcf-readapt-registro', JSON.stringify(registro), true); }
   function saveJugadores(){ stSet('rcf-readapt-jugadores', JSON.stringify(jugadores), true); }
   function saveLesionados(){ stSet('rcf-readapt-lesionados', JSON.stringify({lista:lesionados, fecha:informeMeta.fecha, micro:informeMeta.micro}), true); }
@@ -618,6 +607,7 @@
     return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
   }
   const SHEET_FIELD_MAP = [
+    {key:'marcaTemporal', aliases:['marca temporal']},
     {key:'jugId', aliases:['id de jugador','id jugador']},
     {key:'nombre', aliases:['nombre y apellido','nombre']},
     {key:'fechaLesion', aliases:['fecha lesion']},
@@ -683,7 +673,14 @@
     if(!rec.jugId && !rec.nombre) return null;
     const existingIdx = lesionados.findIndex(l => rec.jugId ? l.jugId===rec.jugId : l.nombre===rec.nombre);
     if(existingIdx !== -1){
-      lesionados[existingIdx] = Object.assign({}, lesionados[existingIdx], rec);
+      const existing = lesionados[existingIdx];
+      // Si llega una fila con una Marca temporal nueva (un informe de lesión distinto al ya conocido),
+      // se considera una alta médica nueva y el jugador vuelve a aparecer en los filtros aunque
+      // se hubiera marcado antes como "de alta" a mano.
+      const esInformeNuevo = rec.marcaTemporal && rec.marcaTemporal !== existing.marcaTemporal;
+      const merged = Object.assign({}, existing, rec);
+      if(esInformeNuevo) merged.activo = true;
+      lesionados[existingIdx] = merged;
       return 'updated';
     }
     const nuevo = nuevoLesionado();
@@ -815,15 +812,9 @@
   function saveDraft(){ stSet('rcf-readapt-draft', JSON.stringify({state, sesion}), false); }
 
 
-  // ================= BANCO: helpers =================
+  // ================= BANCO: helpers (usado solo como sugerencias de autocompletar en la Ficha) =================
   function poolForSection(section){
-    const base = BANK[section].filter(e => e.minFase <= Number(state.fase));
-    const custs = (bankCustoms[section]||[]);
-    return base.concat(custs);
-  }
-  function effectiveEx(ex){
-    const ov = bankOverrides[ex.id] || {};
-    return Object.assign({}, ex, ov, {id:ex.id, isCustom:String(ex.id).indexOf('cu_')===0});
+    return BANK[section].filter(e => e.minFase <= Number(state.fase));
   }
   function resizeImageToDataURL(file, maxDim, quality){
     return new Promise((resolve, reject)=>{
@@ -846,77 +837,6 @@
       reader.readAsDataURL(file);
     });
   }
-  function ytSearchUrl(name){ return 'https://www.youtube.com/results?search_query=' + encodeURIComponent(name + ' ejercicio readaptación fútbol'); }
-  function ytId(url){
-    if(!url) return null;
-    const m = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,})/);
-    return m ? m[1] : null;
-  }
-  function thumbHtml(yt, img, displayName){
-    if(img){
-      const inner = '<img src="'+img+'" alt="Imagen del ejercicio: '+esc(displayName)+'" loading="lazy">';
-      const id = ytId(yt);
-      return id
-        ? '<a class="rcf-thumb has" href="https://www.youtube.com/watch?v='+id+'" target="_blank" rel="noopener">'+inner+'<span class="playdot">▶</span></a>'
-        : '<div class="rcf-thumb has">'+inner+'</div>';
-    }
-    const id = ytId(yt);
-    if(id){
-      return '<a class="rcf-thumb has" href="https://www.youtube.com/watch?v='+id+'" target="_blank" rel="noopener">'
-        + '<img src="https://img.youtube.com/vi/'+id+'/mqdefault.jpg" alt="Carátula del vídeo: '+esc(displayName)+'" loading="lazy">'
-        + '<span class="playdot">▶</span></a>';
-    }
-    return '<a class="rcf-thumb empty" href="'+ytSearchUrl(displayName)+'" target="_blank" rel="noopener">'
-      + '<span class="picn">🔍</span><span class="pict">Buscar vídeo</span></a>';
-  }
-
-  function bankCardHtml(ex, section){
-    const e = effectiveEx(ex);
-    const open = openEdits.has(e.id);
-    const faseBadge = e.minFase>1 ? '<span class="badge fase">Fase '+e.minFase+'+</span>' : '';
-    const customBadge = e.isCustom ? '<span class="badge added">Propio</span>' : '';
-    return '<div class="rcf-card" data-exid="'+e.id+'">'
-      + thumbHtml(e.yt, e.img, e.n)
-      + '<div class="rcf-badges"><span class="badge mat">'+esc(e.mat||'—')+'</span>'+faseBadge+customBadge+'</div>'
-      + '<div class="ename">'+esc(e.n)+'</div>'
-      + '<div class="dosegrid">'
-      +   '<div><span class="k">Series</span>'+esc(e.series||'—')+'</div>'
-      +   '<div><span class="k">Repeticiones</span>'+esc(e.reps||'—')+'</div>'
-      +   '<div style="grid-column:1/-1"><span class="k">Carga / intensidad</span>'+esc(e.carga||'—')+'</div>'
-      +   '<div><span class="k">RPE</span>'+esc(e.rpe||'—')+'</div>'
-      +   '<div><span class="k">Descanso</span>'+esc(e.descanso||'—')+'</div>'
-      + '</div>'
-      + (e.note ? '<div class="ev" style="color:var(--muted);font-style:normal;">⚠ '+esc(e.note)+'</div>' : '')
-      + (e.ev ? '<div class="ev">'+esc(e.ev)+'</div>' : '')
-      + '<div class="vidrow"><span class="vidstatus">'+(e.yt?'Vídeo':'')+(e.yt&&e.img?' + ':'')+(e.img?'Imagen':'')+(!e.yt&&!e.img?'Sin vídeo ni imagen':' asignado')+'</span><button class="rcf-editbtn no-print" data-editex="'+e.id+'">✎</button></div>'
-      + '<div class="rcf-editform'+(open?' open':'')+'" id="form-'+e.id+'">'
-      +   '<label>Nombre</label><input type="text" id="name-'+e.id+'" value="'+esc(e.n)+'">'
-      +   '<div class="erow2"><div><label>Series</label><input type="text" id="series-'+e.id+'" value="'+esc(e.series||'')+'"></div><div><label>Repeticiones</label><input type="text" id="reps-'+e.id+'" value="'+esc(e.reps||'')+'"></div></div>'
-      +   '<label>Carga / intensidad</label><input type="text" id="carga-'+e.id+'" value="'+esc(e.carga||'')+'">'
-      +   '<div class="erow2"><div><label>RPE</label><input type="text" id="rpe-'+e.id+'" value="'+esc(e.rpe||'')+'"></div><div><label>Descanso</label><input type="text" id="descanso-'+e.id+'" value="'+esc(e.descanso||'')+'"></div></div>'
-      +   '<label>Nota / precaución</label><input type="text" id="note-'+e.id+'" value="'+esc(e.note||'')+'">'
-      +   '<label>Enlace de YouTube</label><input type="text" placeholder="https://youtube.com/..." id="yt-'+e.id+'" value="'+esc(e.yt||'')+'">'
-      +   '<label>Imagen / GIF del ejercicio</label><div class="erow"><input type="file" accept="image/*" data-imgupload="'+e.id+'" data-section="'+section+'" style="font-size:10.5px;max-width:150px;">'
-      +     (e.img ? '<button class="hidebtn" data-imgremove="'+e.id+'" data-section="'+section+'">Quitar imagen</button>' : '')+'</div>'
-      +   '<div class="erow"><button class="save" data-savex="'+e.id+'">Guardar</button>'
-      +     (e.isCustom ? '<button class="hidebtn" data-delcustom="'+e.id+'" data-section="'+section+'">Eliminar</button>' : '<button class="clear" data-clearx="'+e.id+'">Restablecer</button>')
-      +     '<span class="rcf-saveflag" id="saveflag-'+e.id+'">guardado ✓</span></div>'
-      + '</div>'
-      + '<button class="rcf-addtosession no-print" data-addtosession="'+e.id+'" data-section="'+section+'">+ Añadir a la sesión</button>'
-      + '</div>';
-  }
-
-  function renderBankSection(section){
-    const pool = poolForSection(section);
-    const cards = pool.map(ex => bankCardHtml(ex, section)).join('');
-    return '<div class="rcf-section">'
-      + '<h2><span class="rcf-dot" style="background:'+SECTION_COLOR[section]+';"></span>'+esc(labelFor(section))+'</h2>'
-      + '<p class="sdesc">'+SECTION_DESC[section]+'</p>'
-      + '<div class="rcf-grid">'
-      + cards
-      + '<div class="rcf-addcard no-print" data-addcustom="'+section+'">+ Añadir ejercicio propio</div>'
-      + '</div></div>';
-  }
 
   // ================= FICHA DE SESIÓN =================
   function totalDuracion(){
@@ -934,7 +854,7 @@
     const codeId = SECTION_ABBR[section]+'-'+(idx+1);
     return '<tr data-row="'+section+':'+item.rowId+'">'
       + '<td class="idcell">'+codeId+'</td>'
-      + '<td class="ename-cell"><input type="text" id="ses-'+section+'-'+item.rowId+'-name" value="'+esc(item.n)+'"></td>'
+      + '<td class="ename-cell"><input type="text" list="bancoOptions-'+section+'" id="ses-'+section+'-'+item.rowId+'-name" value="'+esc(item.n)+'" placeholder="Nombre del ejercicio…"></td>'
       + '<td style="width:60px"><input type="text" id="ses-'+section+'-'+item.rowId+'-series" value="'+esc(item.series||'')+'"></td>'
       + '<td style="width:90px"><input type="text" id="ses-'+section+'-'+item.rowId+'-reps" value="'+esc(item.reps||'')+'"></td>'
       + '<td style="min-width:140px"><input type="text" id="ses-'+section+'-'+item.rowId+'-carga" value="'+esc(item.carga||'')+'"></td>'
@@ -961,16 +881,19 @@
     const items = sesion[section];
     const rows = items.length
       ? items.map((it,i)=>fichaRowHtml(it, section, i, items.length)).join('')
-      : '<tr class="rcf-emptyrow"><td colspan="9">Sin ejercicios todavía — añádelos desde la pestaña «Diseño de sesión».</td></tr>';
+      : '<tr class="rcf-emptyrow"><td colspan="9">Sin ejercicios todavía — pulsa «+ Añadir ejercicio» debajo.</td></tr>';
+    const options = poolForSection(section).map(e=>'<option value="'+esc(e.n)+'">').join('');
     return '<div class="rcf-section">'
       + '<h2><span class="rcf-dot" style="background:'+SECTION_COLOR[section]+';"></span>'
       +   '<input type="text" class="rcf-sectitle-input" id="seclabel-'+section+'" value="'+esc(labelFor(section))+'"></h2>'
       + '<div class="rcf-blockmin no-print">Minutos de bloque: <input type="text" inputmode="numeric" id="blockmin-'+section+'" value="'+esc(state.blockMin[section])+'"></div>'
       + (section==='campo' ? campoImageHtml() : '')
+      + '<datalist id="bancoOptions-'+section+'">'+options+'</datalist>'
       + '<div style="overflow-x:auto;"><table class="rcf-fichatable">'
       +   '<thead><tr><th>ID</th><th>Ejercicio</th><th>Series</th><th>Repeticiones</th><th>Carga / intensidad</th><th>RPE</th><th>Descanso</th><th>Notas</th><th class="no-print"></th></tr></thead>'
       +   '<tbody>'+rows+'</tbody>'
       + '</table></div>'
+      + '<button class="rcf-morebtn no-print" data-addejercicio="'+section+'">+ Añadir ejercicio</button>'
       + '</div>';
   }
 
@@ -1244,7 +1167,7 @@
       + '<td class="no-print" style="white-space:nowrap;">'
       +   '<button class="rcf-editbtn" data-lesedit="'+r.id+'" title="Editar ficha">✎</button> '
       +   '<button class="rcf-editbtn" data-lessession="'+r.id+'" title="Usar objetivo/observaciones de la última sesión">⤓</button> '
-      +   '<button class="rcf-editbtn" data-lesalta="'+r.id+'" title="'+(r.activo?'Dar de alta':'Reactivar seguimiento')+'">'+(r.activo?'✓':'↺')+'</button> '
+      +   '<label class="rcf-alta-check" title="Dar de alta: deja de aparecer en los filtros hasta el próximo informe de lesión en Excel"><input type="checkbox" data-lesalta="'+r.id+'"'+(!r.activo?' checked':'')+'> Alta</label> '
       +   '<button class="rmbtn" data-lesdel="'+r.id+'" title="Eliminar">✕</button>'
       + '</td></tr>';
   }
@@ -1285,7 +1208,7 @@
   }
   function citaFormHtml(){
     const d = citaDraft;
-    const rosterOpts = '<option value="">— Sin jugador asignado —</option>' + lesionados.slice()
+    const rosterOpts = '<option value="">— Sin jugador asignado —</option>' + lesionados.filter(l=>l.activo)
       .sort((a,b)=>(a.nombre||a.jugId||'').localeCompare(b.nombre||b.jugId||'', 'es'))
       .map(l=>'<option value="'+esc(l.jugId)+'"'+(d.jugId===l.jugId?' selected':'')+'>'+esc(l.nombre||l.jugId)+' ('+esc(l.jugId||'—')+')'+(l.categoria?' · '+esc(l.categoria):'')+'</option>').join('');
     const lugarOpts = ['Gimnasio','Campo','Gimnasio + Campo','Clínica/Fisio'].map(o=>'<option value="'+o+'"'+(d.lugar===o?' selected':'')+'>'+o+'</option>').join('');
@@ -1489,13 +1412,23 @@
       + '<div class="rcf-tl-bar">'+segs+'</div></div>';
   }
 
+  function lastSessionFor(jugId){
+    const recs = registro[jugId] || [];
+    if(!recs.length) return null;
+    return recs.slice().sort((a,b)=> a.fecha < b.fecha ? 1 : -1)[0];
+  }
   function jugadorSummaryLine(){
     if(!state.jugId){
       return '<div class="rcf-field wide"><label>Jugador</label><div style="padding:8px 10px;border:1.5px dashed var(--line);border-radius:8px;font-size:13px;color:var(--muted);">Ningún jugador seleccionado — elígelo en el selector de arriba.</div></div>';
     }
+    const last = lastSessionFor(state.jugId);
+    const lastText = last
+      ? 'Última sesión: '+(last.numeroSesion?'Nº '+esc(last.numeroSesion)+' · ':'')+esc(last.fecha)+' · Fase '+esc(last.fase)
+      : 'Sin sesiones registradas todavía';
     return '<div class="rcf-field wide"><label>Jugador</label><div style="padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font-size:13.5px;font-weight:600;background:#fff;">'
       + esc(state.jugNombre||'—') + ' <span class="mono" style="font-weight:400;color:var(--muted);">('+esc(state.jugId)+')</span>'
       + (state.jugCat ? ' <span class="badge mat" style="margin-left:4px;">'+esc(state.jugCat)+'</span>' : '')
+      + '<div class="mono" style="font-weight:400;font-size:11px;color:var(--muted);margin-top:4px;">'+lastText+'</div>'
       + '</div></div>';
   }
 
@@ -1514,24 +1447,23 @@
 
     html += '<div class="rcf-filters no-print"><div class="rcf-filtergroup"><span class="flabel">Ubicación del bloque principal</span><div class="rcf-pills" id="tipolocSelector"></div></div></div>';
     html += renderTimelineBar();
-    html += '<div class="rcf-hint no-print">Elige la fase RTP y la ubicación del bloque principal: el diseño de sesión y la ficha se filtran automáticamente. Los minutos de cada bloque se ajustan desde la pestaña «Ficha de sesión».</div>';
+    html += '<div class="rcf-hint no-print">Elige la fase RTP y la ubicación del bloque principal: los bloques y las sugerencias de ejercicios se filtran automáticamente. Los minutos de cada bloque se ajustan aquí mismo.</div>';
     return html;
   }
 
   function renderGlobalFilterBar(){
-    const rosterOptions = lesionados.slice().sort((a,b)=> (a.nombre||a.jugId||'').localeCompare(b.nombre||b.jugId||'', 'es'));
+    const rosterOptions = lesionados.filter(l=>l.activo).slice().sort((a,b)=> (a.nombre||a.jugId||'').localeCompare(b.nombre||b.jugId||'', 'es'));
     const opts = '<option value="">— Todos los jugadores —</option>' + rosterOptions.map(r=>
-      '<option value="'+esc(r.jugId)+'"'+(state.jugId===r.jugId?' selected':'')+'>'+esc(r.nombre||r.jugId)+' ('+esc(r.jugId||'—')+')'+(r.categoria?' · '+esc(r.categoria):'')+(!r.activo?' · alta':'')+'</option>'
+      '<option value="'+esc(r.jugId)+'"'+(state.jugId===r.jugId?' selected':'')+'>'+esc(r.nombre||r.jugId)+' ('+esc(r.jugId||'—')+')'+(r.categoria?' · '+esc(r.categoria):'')+'</option>'
     ).join('');
     return '<span class="gf-label">Jugador</span>'
       + '<select id="globalJugadorSelect">'+opts+'</select>'
       + (state.jugId ? '<button class="rcf-editbtn" id="btnClearGlobalFilter" title="Quitar filtro">✕</button>' : '')
-      + '<span class="gf-hint">Filtra el diseño de sesión, el registro de carga y el seguimiento por este jugador.</span>';
+      + '<span class="gf-hint">Filtra la ficha de sesión, el registro de carga y el seguimiento por este jugador.</span>';
   }
 
   // ================= RENDER PRINCIPAL =================
   const TABS = [
-    {id:'banco', label:'Diseño de sesión'},
     {id:'ficha', label:'Ficha de sesión'},
     {id:'citas', label:'Calendario semanal'},
     {id:'registro', label:'Registro y carga'},
@@ -1547,9 +1479,7 @@
 
     const showContext = state.activeTab !== 'seguimiento' && state.activeTab !== 'citas' && state.activeTab !== 'memoria';
     let body = showContext ? renderContextPanel() : '';
-    if(state.activeTab === 'banco'){
-      body += sectionsVisible(state.tipoloc).map(renderBankSection).join('');
-    } else if(state.activeTab === 'ficha'){
+    if(state.activeTab === 'ficha'){
       body += renderFichaTab();
     } else if(state.activeTab === 'citas'){
       body += renderCitasTab();
@@ -1571,11 +1501,6 @@
         '<button class="rcf-pill'+(t.id===state.tipoloc?' active':'')+'" data-tipoloc="'+t.id+'">'+t.label+'<small>'+t.sub+'</small></button>'
       ).join('');
     }
-
-    const modeNote = STORAGE_MODE==='cloud'
-      ? 'Los cambios se guardan compartidos: todo el cuerpo técnico que abra este panel verá el mismo diseño de sesión, seguimiento y registro de carga.'
-      : 'Modo navegador: los cambios se guardan en este dispositivo (localStorage). Para compartirlos entre todo el cuerpo técnico, aloja este archivo detrás de un backend compartido o ábrelo dentro de Claude.';
-    document.getElementById('storageNote').textContent = modeNote;
 
     attachHandlers();
   }
@@ -1605,7 +1530,8 @@
       const rec = lesionados.find(l=>l.jugId===state.jugId);
       state.jugNombre = rec ? rec.nombre : '';
       state.jugCat = rec ? rec.categoria : '';
-      state.regSesSel = '';
+      const last = lastSessionFor(state.jugId);
+      state.regSesSel = last ? last.id : '';
       saveDraft(); render();
     };
     const btnClearGF = document.getElementById('btnClearGlobalFilter');
@@ -1617,75 +1543,10 @@
     document.querySelectorAll('[data-fase]').forEach(el=>el.onclick=()=>{ state.fase=Number(el.dataset.fase); saveDraft(); render(); });
     document.querySelectorAll('[data-tipoloc]').forEach(el=>el.onclick=()=>{ state.tipoloc=el.dataset.tipoloc; saveDraft(); render(); });
 
-    document.querySelectorAll('[data-editex]').forEach(el=>el.onclick=()=>{
-      const id=el.dataset.editex;
-      if(openEdits.has(id)) openEdits.delete(id); else openEdits.add(id);
-      render();
-    });
-    document.querySelectorAll('[data-savex]').forEach(el=>el.onclick=()=>{
-      const id=el.dataset.savex;
-      const get=(p)=>{ const e=document.getElementById(p+'-'+id); return e ? e.value.trim() : ''; };
-      const data = {n:get('name')||'(sin nombre)', series:get('series'), reps:get('reps'), carga:get('carga'), rpe:get('rpe'), descanso:get('descanso'), note:get('note'), yt:get('yt')};
-      if(String(id).indexOf('cu_')===0){
-        Object.keys(bankCustoms).forEach(sec=>{
-          bankCustoms[sec] = (bankCustoms[sec]||[]).map(c=> c.id===id ? Object.assign({}, c, data) : c);
-        });
-      } else {
-        bankOverrides[id] = Object.assign({}, bankOverrides[id]||{}, data);
-      }
-      openEdits.delete(id);
-      saveBanco(); render();
-    });
-    document.querySelectorAll('[data-imgupload]').forEach(el=>el.onchange=async ()=>{
-      const id=el.dataset.imgupload, section=el.dataset.section;
-      const file = el.files && el.files[0];
-      if(!file) return;
-      let dataUrl;
-      try{ dataUrl = await resizeImageToDataURL(file, 900, 0.82); }
-      catch(e){ alert('No se pudo procesar la imagen.'); return; }
-      if(String(id).indexOf('cu_')===0){
-        bankCustoms[section] = (bankCustoms[section]||[]).map(c=> c.id===id ? Object.assign({}, c, {img:dataUrl}) : c);
-      } else {
-        bankOverrides[id] = Object.assign({}, bankOverrides[id]||{}, {img:dataUrl});
-      }
-      openEdits.add(id);
-      saveBanco(); render();
-    });
-    document.querySelectorAll('[data-imgremove]').forEach(el=>el.onclick=()=>{
-      const id=el.dataset.imgremove, section=el.dataset.section;
-      if(String(id).indexOf('cu_')===0){
-        bankCustoms[section] = (bankCustoms[section]||[]).map(c=> c.id===id ? Object.assign({}, c, {img:undefined}) : c);
-      } else {
-        if(bankOverrides[id]) bankOverrides[id].img = undefined;
-      }
-      openEdits.add(id);
-      saveBanco(); render();
-    });
-    document.querySelectorAll('[data-clearx]').forEach(el=>el.onclick=()=>{
-      delete bankOverrides[el.dataset.clearx]; openEdits.delete(el.dataset.clearx); saveBanco(); render();
-    });
-    document.querySelectorAll('[data-delcustom]').forEach(el=>el.onclick=()=>{
-      const id=el.dataset.delcustom, section=el.dataset.section;
-      bankCustoms[section] = (bankCustoms[section]||[]).filter(c=>c.id!==id);
-      openEdits.delete(id); saveBanco(); render();
-    });
-    document.querySelectorAll('[data-addcustom]').forEach(el=>el.onclick=()=>{
-      const section=el.dataset.addcustom;
-      const id='cu_'+uid();
-      if(!bankCustoms[section]) bankCustoms[section]=[];
-      bankCustoms[section].push({id, n:'Nuevo ejercicio', mat:'', minFase:Number(state.fase), series:'', reps:'', carga:'', rpe:'', descanso:'', note:'', yt:''});
-      openEdits.add(id); saveBanco(); render();
-    });
-    document.querySelectorAll('[data-addtosession]').forEach(el=>el.onclick=()=>{
-      const id=el.dataset.addtosession, section=el.dataset.section;
-      const ex = poolForSection(section).find(x=>x.id===id);
-      if(!ex) return;
-      const e = effectiveEx(ex);
-      sesion[section].push({rowId:uid(), n:e.n, series:e.series||'', reps:e.reps||'', carga:e.carga||'', rpe:e.rpe||'', descanso:e.descanso||'', notas:''});
-      saveDraft();
-      const original = el.textContent;
-      el.textContent = '✓ Añadida a la sesión'; el.classList.add('added');
-      setTimeout(()=>{ el.textContent = original; el.classList.remove('added'); }, 1400);
+    document.querySelectorAll('[data-addejercicio]').forEach(el=>el.onclick=()=>{
+      const section = el.dataset.addejercicio;
+      sesion[section].push({rowId:uid(), n:'', series:'', reps:'', carga:'', rpe:'', descanso:'', notas:''});
+      saveDraft(); render();
     });
 
     document.querySelectorAll('[data-mv]').forEach(el=>el.onclick=()=>{
@@ -1816,9 +1677,9 @@
       rec.nota = (last.objetivo||'') + (last.observaciones ? ' — '+last.observaciones : '');
       saveLesionados(); render();
     });
-    document.querySelectorAll('[data-lesalta]').forEach(el=>el.onclick=()=>{
+    document.querySelectorAll('[data-lesalta]').forEach(el=>el.onchange=()=>{
       const rec = lesionados.find(l=>l.id===el.dataset.lesalta);
-      if(rec){ rec.activo = !rec.activo; saveLesionados(); render(); }
+      if(rec){ rec.activo = !el.checked; saveLesionados(); render(); }
     });
     document.querySelectorAll('[data-lesdel]').forEach(el=>el.onclick=()=>{
       if(!confirm('¿Eliminar definitivamente este jugador del seguimiento de lesionados?')) return;
@@ -1875,6 +1736,8 @@
       const rec = lesionados.find(l=>l.jugId===jugId);
       state.jugNombre = rec ? rec.nombre : '';
       state.jugCat = rec ? rec.categoria : '';
+      const last = lastSessionFor(jugId);
+      state.regSesSel = last ? last.id : '';
       saveDraft(); render();
     });
     document.querySelectorAll('[data-memdel]').forEach(el=>el.onclick=()=>{
@@ -1996,6 +1859,28 @@
       if(t.id==='ldr-faseInicial'){ if(rosterDraft) rosterDraft.faseInicial = Number(t.value)||1; }
       if(t.id==='cit-jugId'){ if(citaDraft) citaDraft.jugId = t.value; }
       if(t.id==='cit-lugar'){ if(citaDraft) citaDraft.lugar = t.value; }
+      if((m = t.id.match(/^ses-([a-z]+)-([^-]+)-name$/))){
+        const section=m[1], rowId=m[2];
+        const item = (sesion[section]||[]).find(x=>x.rowId===rowId);
+        const bank = BANK[section] || [];
+        const match = bank.find(e=> e.n.toLowerCase() === t.value.trim().toLowerCase());
+        if(item && match){
+          const fillIfEmpty = (field, val)=>{
+            if(!item[field] && val){
+              item[field] = val;
+              const el = document.getElementById('ses-'+section+'-'+rowId+'-'+field);
+              if(el) el.value = val;
+            }
+          };
+          fillIfEmpty('series', match.series);
+          fillIfEmpty('reps', match.reps);
+          fillIfEmpty('carga', match.carga);
+          fillIfEmpty('rpe', match.rpe);
+          fillIfEmpty('descanso', match.descanso);
+          fillIfEmpty('notas', match.note);
+          saveDraft();
+        }
+      }
     });
   }
 
@@ -2005,7 +1890,7 @@
     setTimeout(()=>window.print(), 60);
   };
   document.getElementById('btnNueva').onclick = () => {
-    if(!confirm('¿Empezar una sesión nueva? Se perderán los ejercicios añadidos a la sesión actual (el diseño de sesión y el registro de carga no se ven afectados).')) return;
+    if(!confirm('¿Empezar una sesión nueva? Se perderán los ejercicios añadidos a la sesión actual (el registro de carga no se ve afectado).')) return;
     sesion = {calentamiento:[], gym:[], campo:[], vuelta:[]};
     state.objetivo=''; state.rpeSesion=''; state.dolorEva='0'; state.cumplimiento='Completo'; state.observaciones='';
     saveDraft(); render();
