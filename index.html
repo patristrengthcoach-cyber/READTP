@@ -211,6 +211,7 @@
 .rcf-seg-chk input{accent-color:var(--navy);}
 .rcf-alta-check{display:inline-flex; align-items:center; gap:3px; font-size:10.5px; color:var(--muted); cursor:pointer; vertical-align:middle;}
 .rcf-alta-check input{accent-color:var(--red);}
+.rcf-mem-exrow td{background:#FBFAF6;}
 
 /* ===== CALENDARIO SEMANAL ===== */
 .rcf-citas-grid{display:grid; grid-template-columns:repeat(7,minmax(150px,1fr)); gap:8px;}
@@ -1347,9 +1348,26 @@
       + '<div class="mpc-count">'+count+' sesión'+(count===1?'':'es')+' guardada'+(count===1?'':'s')+'</div>'
       + '</button>';
   }
+  function resumenEjerciciosSesion(sc){
+    if(!sc) return null;
+    const bloques = [
+      {key:'calentamiento', label:'Calent.'},
+      {key:'gym', label:'Gym'},
+      {key:'campo', label:'Campo'},
+      {key:'vuelta', label:'Vuelta'},
+      {key:'test', label:'Test'}
+    ];
+    const partes = [];
+    bloques.forEach(b=>{
+      const items = (sc[b.key]||[]).filter(x=> (x.n||x.test) && String(x.n||x.test).trim());
+      if(items.length) partes.push(b.label+': '+items.map(x=>x.n||x.test).join(', '));
+    });
+    return partes.length ? partes.join(' · ') : null;
+  }
   function memoriaRowHtml(r){
     const faseOpts = FASES.map(f=>'<option value="'+f.id+'"'+(Number(r.fase)===f.id?' selected':'')+'>'+f.id+' · '+f.label+'</option>').join('');
     const cumplOpts = ['Completo','Parcial','No realizada'].map(o=>'<option value="'+o+'"'+(r.cumplimiento===o?' selected':'')+'>'+o+'</option>').join('');
+    const resumen = resumenEjerciciosSesion(r.sesionCompleta);
     return '<tr>'
       + '<td style="width:125px;"><input type="date" id="mem-'+r.id+'-fecha" value="'+esc(r.fecha||'')+'"></td>'
       + '<td style="width:55px;"><input type="text" id="mem-'+r.id+'-numeroSesion" value="'+esc(r.numeroSesion||'')+'"></td>'
@@ -1364,6 +1382,9 @@
       + '<td class="no-print" style="white-space:nowrap;">'
       +   '<button class="rcf-editbtn" data-memtemplate="'+r.id+'" title="Escribe esta sesión en la Ficha de sesión (fase, objetivo, ejercicios si los tiene)">→ Ficha</button> '
       +   '<button class="rmbtn" data-memdel="'+r.id+'" title="Eliminar sesión">✕</button>'
+      + '</td></tr>'
+      + '<tr class="rcf-mem-exrow"><td colspan="11" style="padding:2px 10px 9px;border-top:none;font-size:11px;'+(resumen?'color:var(--muted);':'color:var(--muted);font-style:italic;')+'">'
+      +   (resumen ? '<b style="color:var(--ink);font-weight:600;">Ejercicios guardados:</b> '+esc(resumen) : 'Sin ejercicios guardados en esta sesión (se guardó sin pasar por la Ficha de sesión, o los bloques estaban vacíos).')
       + '</td></tr>';
   }
   function renderMemoriaTab(){
