@@ -43,7 +43,7 @@ No sustituye el criterio médico ni fisioterapéutico. Es una herramienta de apo
 - Pestaña con un filtro **De baja / De alta** y, dentro de cada uno, una tarjeta por jugador (con el nº de sesiones que tiene guardadas) para elegir con quién trabajar.
 - Al elegir un jugador, se listan **todas sus sesiones guardadas** en una tabla totalmente editable: fecha, nº de sesión, fase, objetivo, duración, RPE, dolor EVA, cumplimiento y observaciones. La carga (duración × RPE) se recalcula sola al editar duración o RPE.
 - Pensada para corregir después del hecho — por ejemplo, si al guardar la sesión se apuntó mal el RPE o se te olvidó marcar "Parcial" en vez de "Completo". Cada cambio se guarda directamente sobre esa sesión.
-- **📋 Usar como plantilla**: cada sesión que tiene ejercicios guardados (no las añadidas rápido desde Registro y carga) tiene este botón. Carga todos sus ejercicios en la Ficha de sesión para reutilizarlos — se puede aplicar al mismo jugador o cambiar el filtro global a otro distinto antes de guardar; la plantilla no se pierde al cambiar de jugador (aparece un aviso "Plantilla cargada" con opción de quitarla).
+- **→ Ficha**: botón disponible en **todas** las sesiones guardadas (tengan o no ejercicios). Escribe esa sesión directamente en la Ficha de sesión — fase, objetivo y el siguiente número sugerido siempre, más los ejercicios de cada bloque si esa sesión los tiene (por ejemplo, no los tendrá si se guardó como "sesión esporádica" desde Registro y carga). Se puede aplicar al mismo jugador o cambiar el filtro global a otro distinto antes de guardar; lo escrito no se pierde al cambiar de jugador (aparece un aviso "Plantilla cargada" con opción de quitarla).
 - También permite eliminar una sesión guardada por error.
 
 ## Cómo abrirlo

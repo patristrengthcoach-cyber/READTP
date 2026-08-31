@@ -1362,7 +1362,7 @@
       + '<td style="width:115px;"><select id="mem-'+r.id+'-cumplimiento">'+cumplOpts+'</select></td>'
       + '<td style="min-width:170px;"><input type="text" id="mem-'+r.id+'-observaciones" value="'+esc(r.observaciones||'')+'"></td>'
       + '<td class="no-print" style="white-space:nowrap;">'
-      +   (sesionCompletaTieneContenido(r.sesionCompleta) ? '<button class="rcf-editbtn" data-memtemplate="'+r.id+'" title="Usar como plantilla para una sesión nueva (de este jugador o de otro)">📋</button> ' : '')
+      +   '<button class="rcf-editbtn" data-memtemplate="'+r.id+'" title="Escribe esta sesión en la Ficha de sesión (fase, objetivo, ejercicios si los tiene)">→ Ficha</button> '
       +   '<button class="rmbtn" data-memdel="'+r.id+'" title="Eliminar sesión">✕</button>'
       + '</td></tr>';
   }
@@ -1827,7 +1827,7 @@
     });
     document.querySelectorAll('[data-memtemplate]').forEach(el=>el.onclick=()=>{
       const rec = (registro[state.jugId]||[]).find(r=>r.id===el.dataset.memtemplate);
-      if(!rec || !rec.sesionCompleta) return;
+      if(!rec) return;
       cargarSesionCompletaEnFicha(rec);
       sesionEsPlantilla = true;
       state.activeTab = 'ficha';
