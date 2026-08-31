@@ -256,20 +256,32 @@
   .rcf-header{background:var(--navy) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
   .rcf-tl-seg{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
   .rcf-card{break-inside:avoid;}
-  .rcf-section{break-inside:avoid; padding:10px 20px;}
+  .rcf-section{break-inside:avoid; padding:8px 20px;}
   .print-only{display:block !important;}
+
+  /* Compactación general de cualquier tabla de ficha al imprimir (Ficha de sesión, Test, Memoria) */
+  table.rcf-fichatable{ table-layout:fixed; width:100%; }
+  table.rcf-fichatable th, table.rcf-fichatable td{
+    font-size:9px !important; line-height:1.25; padding:3px 4px !important;
+    word-break:break-word; overflow-wrap:break-word; white-space:normal !important;
+  }
+  table.rcf-fichatable input, table.rcf-fichatable select, table.rcf-fichatable textarea{
+    display:block; width:100% !important; max-width:100% !important; box-sizing:border-box !important;
+    font-size:9px !important; line-height:1.25; min-height:0 !important; height:auto !important;
+    padding:2px 3px !important; border:none !important; resize:none; overflow-wrap:break-word; word-break:break-word;
+  }
+  table.rcf-fichatable thead{ display:table-header-group; }
+  table.rcf-fichatable tr{ break-inside:avoid; page-break-inside:avoid; }
+  .rcf-blockmin{ margin-bottom:4px !important; }
+  .rcf-summary{ padding:8px 10px !important; }
 
   /* Informe de seguimiento: fuerza que las 12 columnas quepan en el ancho de la hoja */
   .rcf-print-landscape{
     break-inside:auto !important; page-break-inside:auto !important;
   }
-  .rcf-print-landscape table.rcf-fichatable{
-    table-layout:fixed; width:100%;
-  }
   .rcf-print-landscape table.rcf-fichatable th,
   .rcf-print-landscape table.rcf-fichatable td{
-    min-width:0 !important; width:auto; font-size:7.5px !important; line-height:1.25;
-    padding:3px 4px !important; word-break:break-word; overflow-wrap:break-word; white-space:normal !important;
+    min-width:0 !important; width:auto; font-size:7.5px !important;
   }
   .rcf-print-landscape table.rcf-fichatable th:nth-child(1),
   .rcf-print-landscape table.rcf-fichatable td:nth-child(1){ width:5%; }
@@ -286,16 +298,12 @@
   .rcf-print-landscape table.rcf-fichatable textarea,
   .rcf-print-landscape table.rcf-fichatable input,
   .rcf-print-landscape table.rcf-fichatable select{
-    display:block; width:100% !important; max-width:100% !important; box-sizing:border-box !important;
-    font-size:7.5px !important; line-height:1.25; min-height:0 !important; height:auto !important;
-    padding:2px 3px !important; border:none !important; resize:none; overflow-wrap:break-word; word-break:break-word;
+    font-size:7.5px !important;
   }
   .rcf-print-landscape .rcf-lesnota-print{
     font-size:7.5px !important; line-height:1.3; white-space:pre-wrap;
     word-break:break-word; overflow-wrap:break-word; padding:2px 3px;
   }
-  .rcf-print-landscape table.rcf-fichatable thead{ display:table-header-group; }
-  .rcf-print-landscape table.rcf-fichatable tr{ break-inside:avoid; page-break-inside:avoid; }
 }
 .print-only{display:none;}
 </style>
@@ -442,7 +450,7 @@
     rpeSesion:'', dolorEva:'0', cumplimiento:'Completo', observaciones:'',
     sectionLabels: Object.assign({}, SECTION_LABEL_DEFAULTS),
     campoImagen: null,
-    regJugSel:'', regSesSel:''
+    regJugSel:'', regSesSel:'', draftJugId:null, draftSessionId:null
   };
   let sesion = {calentamiento:[], gym:[], campo:[], vuelta:[], test:[]};
   let lesionados = [];       // roster de jugadores de baja (seguimiento global)
@@ -466,7 +474,17 @@
   let fbLastEventAt = null;
   let fbUnsubscribe = null;
   let fbAppRef = null;
-  let rosterFormOpen = false, rosterMoreOpen = false, editingRosterId = null, rosterDraft = null, showArchivedRoster = false;
+  let rosterFormOpen = false, rosterMoreOpen = false, editingRosterId = null, rosterDraft = null, segFiltroEstado = 'baja';
+  const SEG_ESTADO_FILTROS = [
+    {id:'baja', label:'Bajas'},
+    {id:'alta', label:'Altas'},
+    {id:'todos', label:'Todos'}
+  ];
+  function segEstadoFilterFn(l){
+    if(segFiltroEstado==='todos') return true;
+    if(segFiltroEstado==='alta') return !l.activo;
+    return !!l.activo;
+  }
   let memoriaFiltro = 'baja'; // 'baja' | 'alta'
   const MEMORIA_FILTROS = [
     {id:'baja', label:'De baja', sub:'Actualmente lesionados'},
@@ -474,6 +492,10 @@
   ];
   let citas = [];
   let citaFormOpen = false, editingCitaId = null, citaDraft = null;
+  let sesionRapidaFormOpen = false, sesionRapidaDraft = null;
+  function nuevaSesionRapida(){
+    return {id:uid(), fecha:todayISO(), numeroSesion:'', fase:4, objetivo:'', duracion:'', rpe:'', dolorEva:'0', cumplimiento:'Completo', observaciones:''};
+  }
   const DAY_NAMES = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
   function mondayOf(iso){
     const d = new Date(iso+'T00:00:00');
@@ -505,7 +527,7 @@
     return CAT_PALETTE[Math.abs(h) % CAT_PALETTE.length];
   }
   function isEditingSomething(){
-    return !!(rosterFormOpen || citaFormOpen);
+    return !!(rosterFormOpen || citaFormOpen || sesionRapidaFormOpen);
   }
   function nuevoLesionado(){
     return {id:uid(), jugId:'', nombre:'', categoria:'', posicion:'', fechaLesion:todayISO(), temporada:'', diagnostico:'',
@@ -586,6 +608,10 @@
         if(parsed.sesion) sesion = Object.assign(sesion, parsed.sesion);
       }
     }catch(e){}
+    // Si ya había un jugador seleccionado (de una sesión anterior del navegador), comprueba si
+    // desde entonces hay una sesión más reciente guardada (por ejemplo, por otro miembro del
+    // cuerpo técnico) y, de ser así, carga esa en vez de dejar la ficha con datos antiguos.
+    if(state.jugId) switchToPlayer(state.jugId);
     render();
     if(sheetSyncUrl){ syncFromSheet(false); }
     if(firebaseConfigStr){ connectFirebase(); }
@@ -839,6 +865,32 @@
   }
 
   // ================= FICHA DE SESIÓN =================
+  function snapshotSesionCompleta(){
+    const cp = (arr)=> (arr||[]).map(x=>Object.assign({}, x));
+    return {
+      calentamiento: cp(sesion.calentamiento), gym: cp(sesion.gym), campo: cp(sesion.campo),
+      vuelta: cp(sesion.vuelta), test: cp(sesion.test),
+      blockMin: Object.assign({}, state.blockMin), tipoloc: state.tipoloc
+    };
+  }
+  function sesionCompletaTieneContenido(sc){
+    if(!sc) return false;
+    return ['calentamiento','gym','campo','vuelta'].some(k => (sc[k]||[]).length > 0);
+  }
+  function cargarSesionCompletaEnFicha(rec){
+    const sc = rec.sesionCompleta || {};
+    const withFreshIds = (arr)=> (arr||[]).map(x=>Object.assign({}, x, {rowId:uid()}));
+    sesion = {
+      calentamiento: withFreshIds(sc.calentamiento), gym: withFreshIds(sc.gym),
+      campo: withFreshIds(sc.campo), vuelta: withFreshIds(sc.vuelta), test: withFreshIds(sc.test)
+    };
+    if(sc.blockMin) state.blockMin = Object.assign({}, sc.blockMin);
+    if(sc.tipoloc) state.tipoloc = sc.tipoloc;
+    if(rec.fase) state.fase = Number(rec.fase);
+    if(rec.objetivo) state.objetivo = rec.objetivo;
+    const nextNum = parseInt(rec.numeroSesion, 10);
+    state.numeroSesion = isNaN(nextNum) ? '' : String(nextNum+1);
+  }
   function totalDuracion(){
     const secs = sectionsVisible(state.tipoloc);
     return secs.reduce((sum,s)=> sum + (Number(state.blockMin[s])||0), 0);
@@ -1014,6 +1066,29 @@
 
   function statChip(label, val){ return '<div class="rcf-stat"><div class="slabel">'+esc(label)+'</div><div class="sval" style="font-size:16px;">'+esc(val)+'</div></div>'; }
 
+  function sesionRapidaFormHtml(){
+    const d = sesionRapidaDraft;
+    const faseOpts = FASES.map(f=>'<option value="'+f.id+'"'+(Number(d.fase)===f.id?' selected':'')+'>'+f.id+' · '+f.label+'</option>').join('');
+    const cumplOpts = ['Completo','Parcial','No realizada'].map(o=>'<option value="'+o+'"'+(d.cumplimiento===o?' selected':'')+'>'+o+'</option>').join('');
+    return '<div class="rcf-summary">'
+      + '<h2 style="margin:0 0 10px;font-size:15px;text-transform:uppercase;">Añadir sesión realizada</h2>'
+      + '<p class="sdesc">Para una sesión puntual que se hizo sin pasar por la ficha (por ejemplo, algo esporádico o de última hora).</p>'
+      + '<div class="rcf-datapanel" style="padding:0;margin-bottom:4px;">'
+      +   field('Fecha','sr-fecha', d.fecha, '', 'date')
+      +   field('Nº de sesión','sr-numeroSesion', d.numeroSesion)
+      +   selectFieldHtml('Fase','sr-fase', faseOpts)
+      +   field('Duración (min)','sr-duracion', d.duracion)
+      +   field('RPE (0-10)','sr-rpe', d.rpe)
+      +   field('Dolor EVA (0-10)','sr-dolorEva', d.dolorEva)
+      +   selectFieldHtml('Cumplimiento','sr-cumplimiento', cumplOpts)
+      + '</div>'
+      + '<div class="rcf-field wide"><label>Objetivo</label><input type="text" id="sr-objetivo" value="'+esc(d.objetivo)+'"></div>'
+      + '<div class="rcf-field wide"><label>Observaciones</label><textarea id="sr-observaciones" rows="2">'+esc(d.observaciones)+'</textarea></div>'
+      + '<div class="rcf-hactions no-print" style="padding:0;margin-top:10px;">'
+      +   '<button class="rcf-btn primary" id="btnSesionRapidaSave" style="background:var(--navy);border-color:var(--navy);color:#fff;">Guardar</button>'
+      +   '<button class="rcf-btn" id="btnSesionRapidaCancel" style="border-color:var(--line);color:var(--ink);background:#fff;">Cancelar</button>'
+      + '</div></div>';
+  }
   function renderRegistroTab(){
     const records = state.jugId ? (registro[state.jugId]||[]).slice().sort((a,b)=> a.fecha < b.fecha ? 1 : -1) : [];
     let selHtml = '';
@@ -1029,6 +1104,10 @@
       return '<div class="rcf-section">' + selHtml
         + '<p class="sdesc">Selecciona un jugador en el filtro de arriba para ver su registro de carga y el ACWR. Si no aparece en la lista, añádelo desde la pestaña «Seguimiento de lesionados».</p></div>';
     }
+
+    const addSesionBtn = '<div class="rcf-hactions no-print" style="padding:6px 0 12px;">'
+      + '<button class="rcf-btn" id="btnAddSesionRapida" style="border-color:var(--line);color:var(--ink);background:#fff;">+ Añadir sesión realizada</button>'
+      + '</div>' + (sesionRapidaFormOpen ? sesionRapidaFormHtml() : '');
 
     let detailHtml = '';
     if(state.regSesSel){
@@ -1066,6 +1145,7 @@
     return '<div class="rcf-section">' + selHtml
       + '<h2>Carga de '+esc(state.jugNombre||state.jugId)+'</h2>'
       + '<p class="sdesc">Carga aguda = suma de la carga de los últimos 7 días. Carga crónica = media semanal de las últimas 4 semanas. ACWR = aguda / crónica.</p>'
+      + addSesionBtn
       + detailHtml
       + '<div class="rcf-summary-grid">'
       +   '<div class="rcf-stat"><div class="slabel">Carga aguda (7 días)</div><div class="sval">'+fmtNum(stats.acute7)+'</div></div>'
@@ -1276,8 +1356,10 @@
       + '<td style="width:55px;"><input type="text" inputmode="numeric" id="mem-'+r.id+'-dolorEva" value="'+esc(r.dolorEva||'')+'"></td>'
       + '<td style="width:115px;"><select id="mem-'+r.id+'-cumplimiento">'+cumplOpts+'</select></td>'
       + '<td style="min-width:170px;"><input type="text" id="mem-'+r.id+'-observaciones" value="'+esc(r.observaciones||'')+'"></td>'
-      + '<td class="no-print"><button class="rmbtn" data-memdel="'+r.id+'" title="Eliminar sesión">✕</button></td>'
-      + '</tr>';
+      + '<td class="no-print" style="white-space:nowrap;">'
+      +   (sesionCompletaTieneContenido(r.sesionCompleta) ? '<button class="rcf-editbtn" data-memtemplate="'+r.id+'" title="Usar como plantilla para una sesión nueva (de este jugador o de otro)">📋</button> ' : '')
+      +   '<button class="rmbtn" data-memdel="'+r.id+'" title="Eliminar sesión">✕</button>'
+      + '</td></tr>';
   }
   function renderMemoriaTab(){
     let html = '<div class="rcf-section">'
@@ -1321,57 +1403,29 @@
     }
   }
   function segChecklistHtml(){
-    const base = showArchivedRoster ? lesionados.slice() : lesionados.filter(l=>l.activo);
+    const base = lesionados.filter(segEstadoFilterFn);
     const sorted = base.sort((a,b)=> (a.nombre||a.jugId||'').localeCompare(b.nombre||b.jugId||'', 'es'));
     const rows = sorted.length ? sorted.map(l=>{
       const checked = segSelectedIds.has(l.id);
       return '<label class="rcf-seg-chk"><input type="checkbox" data-segchk="'+l.id+'" '+(checked?'checked':'')+'> '
         + esc(l.nombre||l.jugId||'—')+' <span class="mono">('+esc(l.jugId||'—')+')</span>'
         + (l.categoria?' · '+esc(l.categoria):'')+(!l.activo?' · alta':'')+'</label>';
-    }).join('') : '<span class="sdesc" style="margin:0;">Todavía no hay jugadores de baja dados de alta en el seguimiento.</span>';
+    }).join('') : '<span class="sdesc" style="margin:0;">No hay jugadores en este filtro.</span>';
+    const pills = SEG_ESTADO_FILTROS.map(f=>
+      '<button class="rcf-pill'+(segFiltroEstado===f.id?' active':'')+'" data-segestado="'+f.id+'" style="padding:4px 11px;font-size:11px;">'+f.label+'</button>'
+    ).join('');
     return '<div class="rcf-seg-checklist no-print">'
       + '<div class="rcf-blockmin" style="margin-bottom:6px;flex-wrap:wrap;"><b class="mono" style="text-transform:uppercase;color:var(--muted);font-size:10.5px;">Jugadores en el informe</b>'
-      +   ' <button class="rcf-editbtn" id="btnSegSelAll" title="Seleccionar todos">Todos</button>'
+      +   ' <button class="rcf-editbtn" id="btnSegSelAll" title="Seleccionar todos los del filtro actual">Marcar todos</button>'
       +   ' <button class="rcf-editbtn" id="btnSegSelNone" title="Ninguno">Ninguno</button>'
-      +   '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-left:auto;"><input type="checkbox" id="chkShowArchived" '+(showArchivedRoster?'checked':'')+'> Ver también dados de alta</label>'
+      +   '<span style="display:flex;gap:4px;margin-left:auto;">'+pills+'</span>'
       + '</div>'
       + '<div class="rcf-seg-chklist">'+rows+'</div>'
       + '</div>';
   }
-  function sheetSyncPanelHtml(){
-    const dotColor = sheetSyncStatus==='ok' ? 'var(--green-dark)' : sheetSyncStatus==='error' ? 'var(--red)' : sheetSyncStatus==='loading' ? 'var(--amber)' : 'var(--muted)';
-    const dotChar = sheetSyncStatus ? '●' : '○';
-    const disabledByFirebase = !!firebaseConfigStr;
-    return '<div class="rcf-blockmin no-print" style="flex-wrap:wrap;background:#fff;border:1.5px solid var(--line);border-radius:8px;padding:9px 11px;margin-bottom:8px;'+(disabledByFirebase?'opacity:.5;':'')+'">'
-      + '<b class="mono" style="text-transform:uppercase;color:var(--muted);font-size:10.5px;">Informe de lesiones - RCF</b>'
-      + '<input type="text" id="sheetCsvUrlInput" '+(disabledByFirebase?'disabled':'')+' placeholder="Enlace CSV" value="'+esc(sheetSyncUrl)+'" style="flex:1;min-width:220px;padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-size:11.5px;">'
-      + '<button class="rcf-editbtn" id="btnSaveSheetUrl" '+(disabledByFirebase?'disabled':'')+' title="Guardar enlace">Guardar</button>'
-      + '<button class="rcf-editbtn" id="btnSyncNow" '+(disabledByFirebase?'disabled':'')+' title="Sincronizar ahora">🔄</button>'
-      + '<span class="mono" style="font-size:10px;color:var(--muted);white-space:nowrap;"><span style="color:'+dotColor+';">'+dotChar+'</span> '+(sheetSyncStatus==='loading'?'sincronizando…':timeAgo(lastSyncAt))+'</span>'
-      + (sheetSyncMessage && !disabledByFirebase ? '<div style="flex-basis:100%;font-size:11px;color:'+(sheetSyncStatus==='error'?'var(--red-dark)':'var(--muted)')+';">'+esc(sheetSyncMessage)+'</div>' : '')
-      + '</div>';
-  }
-  function firebaseSyncPanelHtml(){
-    const dotColor = fbSyncStatus==='ok' ? 'var(--green-dark)' : fbSyncStatus==='error' ? 'var(--red)' : fbSyncStatus==='connecting' ? 'var(--amber)' : 'var(--muted)';
-    const dotChar = fbSyncStatus ? '●' : '○';
-    const connected = fbSyncStatus === 'ok';
-    return '<div class="rcf-blockmin no-print" style="flex-wrap:wrap;background:#fff;border:1.5px solid var(--line);border-radius:8px;padding:9px 11px;margin-bottom:12px;">'
-      + '<b class="mono" style="text-transform:uppercase;color:var(--muted);font-size:10.5px;">Opcional: tiempo real con Firebase</b>'
-      + '<span class="mono" style="font-size:10px;color:var(--muted);white-space:nowrap;"><span style="color:'+dotColor+';">'+dotChar+'</span> '+(fbSyncStatus==='connecting'?'conectando…':(connected?('en vivo · último evento '+timeAgo(fbLastEventAt)):(fbSyncStatus==='error'?'error':'no conectado')))+'</span>'
-      + '<div style="flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">'
-      +   '<textarea id="firebaseConfigInput" placeholder="Pega aquí el objeto firebaseConfig completo (de la consola de Firebase: apiKey, authDomain, projectId…)" style="flex:1;min-width:260px;min-height:52px;padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">'+esc(firebaseConfigStr)+'</textarea>'
-      + '</div>'
-      + '<div style="flex-basis:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">'
-      +   '<label style="font-size:11px;color:var(--muted);">Colección: <input type="text" id="firebaseCollectionInput" value="'+esc(firebaseCollection)+'" style="width:150px;padding:4px 7px;border:1px solid var(--line);border-radius:6px;font-size:11px;"></label>'
-      +   '<button class="rcf-editbtn" id="btnFirebaseConnect">'+(connected?'Reconectar':'Guardar y conectar')+'</button>'
-      +   (connected ? '<button class="rcf-editbtn" id="btnFirebaseDisconnect">Desconectar</button>' : '')
-      + '</div>'
-      + (fbSyncMessage ? '<div style="flex-basis:100%;font-size:11px;color:'+(fbSyncStatus==='error'?'var(--red-dark)':'var(--muted)')+';margin-top:4px;">'+esc(fbSyncMessage)+'</div>' : '')
-      + '</div>';
-  }
   function renderSeguimientoTab(){
     ensureSegSelection();
-    const base = showArchivedRoster ? lesionados.slice() : lesionados.filter(l=>l.activo);
+    const base = lesionados.filter(segEstadoFilterFn);
     const list = base.filter(l=>segSelectedIds.has(l.id));
     const rows = list.length ? list.map(seguimientoRowHtml).join('')
       : (lesionados.length
@@ -1380,8 +1434,6 @@
     let html = '<div class="rcf-section rcf-print-landscape">'
       + '<h2>Seguimiento readaptación de lesiones</h2>'
       + '<p class="sdesc no-print">Marca uno o varios jugadores para incluirlos en el informe.</p>'
-      + sheetSyncPanelHtml()
-      + firebaseSyncPanelHtml()
       + '<div class="rcf-datapanel no-print" style="padding:0 0 14px;">'
       +   field('Fecha del informe','inf-fecha',informeMeta.fecha,'','date')
       +   field('Micro','inf-micro',informeMeta.micro,'MC20')
@@ -1417,6 +1469,25 @@
     if(!recs.length) return null;
     return recs.slice().sort((a,b)=> a.fecha < b.fecha ? 1 : -1)[0];
   }
+  let sesionEsPlantilla = false; // true mientras haya una plantilla cargada a propósito (evita que se sobrescriba al cambiar de jugador)
+  function switchToPlayer(jugId){
+    state.jugId = jugId;
+    const rec = lesionados.find(l=>l.jugId===jugId);
+    state.jugNombre = rec ? rec.nombre : '';
+    state.jugCat = rec ? rec.categoria : '';
+    const last = lastSessionFor(jugId);
+    state.regSesSel = last ? last.id : '';
+    const lastId = last ? last.id : null;
+    if(!sesionEsPlantilla && jugId && lastId !== state.draftSessionId){
+      if(last && sesionCompletaTieneContenido(last.sesionCompleta)){
+        cargarSesionCompletaEnFicha(last);
+      } else if(jugId !== state.draftJugId){
+        sesion = {calentamiento:[], gym:[], campo:[], vuelta:[], test:[]};
+      }
+      state.draftJugId = jugId;
+      state.draftSessionId = lastId;
+    }
+  }
   function jugadorSummaryLine(){
     if(!state.jugId){
       return '<div class="rcf-field wide"><label>Jugador</label><div style="padding:8px 10px;border:1.5px dashed var(--line);border-radius:8px;font-size:13px;color:var(--muted);">Ningún jugador seleccionado — elígelo en el selector de arriba.</div></div>';
@@ -1425,10 +1496,14 @@
     const lastText = last
       ? 'Última sesión: '+(last.numeroSesion?'Nº '+esc(last.numeroSesion)+' · ':'')+esc(last.fecha)+' · Fase '+esc(last.fase)
       : 'Sin sesiones registradas todavía';
+    const plantillaNote = sesionEsPlantilla
+      ? '<div class="mono" style="font-weight:600;font-size:11px;color:var(--gold);margin-top:2px;">📋 Plantilla cargada desde Memoria de sesiones — se guardará para este jugador al pulsar Guardar. <button type="button" class="rcf-editbtn no-print" id="btnQuitarPlantilla" style="margin-left:4px;">Quitar</button></div>'
+      : '';
     return '<div class="rcf-field wide"><label>Jugador</label><div style="padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font-size:13.5px;font-weight:600;background:#fff;">'
       + esc(state.jugNombre||'—') + ' <span class="mono" style="font-weight:400;color:var(--muted);">('+esc(state.jugId)+')</span>'
       + (state.jugCat ? ' <span class="badge mat" style="margin-left:4px;">'+esc(state.jugCat)+'</span>' : '')
       + '<div class="mono" style="font-weight:400;font-size:11px;color:var(--muted);margin-top:4px;">'+lastText+'</div>'
+      + plantillaNote
       + '</div></div>';
   }
 
@@ -1526,17 +1601,19 @@
   function attachHandlers(){
     const gJugSel = document.getElementById('globalJugadorSelect');
     if(gJugSel) gJugSel.onchange = ()=>{
-      state.jugId = gJugSel.value;
-      const rec = lesionados.find(l=>l.jugId===state.jugId);
-      state.jugNombre = rec ? rec.nombre : '';
-      state.jugCat = rec ? rec.categoria : '';
-      const last = lastSessionFor(state.jugId);
-      state.regSesSel = last ? last.id : '';
+      switchToPlayer(gJugSel.value);
       saveDraft(); render();
     };
     const btnClearGF = document.getElementById('btnClearGlobalFilter');
     if(btnClearGF) btnClearGF.onclick = ()=>{
       state.jugId=''; state.jugNombre=''; state.jugCat=''; state.regSesSel='';
+      saveDraft(); render();
+    };
+    const btnQuitarPlantilla = document.getElementById('btnQuitarPlantilla');
+    if(btnQuitarPlantilla) btnQuitarPlantilla.onclick = ()=>{
+      sesionEsPlantilla = false;
+      state.draftJugId = null;
+      switchToPlayer(state.jugId);
       saveDraft(); render();
     };
     document.querySelectorAll('[data-tab]').forEach(el=>el.onclick=()=>{ state.activeTab=el.dataset.tab; render(); });
@@ -1646,8 +1723,7 @@
     if(btnRosCancel) btnRosCancel.onclick = ()=>{ rosterFormOpen=false; editingRosterId=null; rosterDraft=null; render(); };
     const btnMasDatos = document.getElementById('btnToggleMasDatos');
     if(btnMasDatos) btnMasDatos.onclick = ()=>{ rosterMoreOpen = !rosterMoreOpen; render(); };
-    const chkArch = document.getElementById('chkShowArchived');
-    if(chkArch) chkArch.onchange = ()=>{ showArchivedRoster = chkArch.checked; render(); };
+    document.querySelectorAll('[data-segestado]').forEach(el=>el.onclick=()=>{ segFiltroEstado = el.dataset.segestado; render(); });
     document.querySelectorAll('[data-segchk]').forEach(el=>el.onchange=()=>{
       ensureSegSelection();
       const id = el.dataset.segchk;
@@ -1657,8 +1733,7 @@
     const btnSegAll = document.getElementById('btnSegSelAll');
     if(btnSegAll) btnSegAll.onclick = ()=>{
       ensureSegSelection();
-      const base = showArchivedRoster ? lesionados : lesionados.filter(l=>l.activo);
-      base.forEach(l=>segSelectedIds.add(l.id));
+      lesionados.filter(segEstadoFilterFn).forEach(l=>segSelectedIds.add(l.id));
       render();
     };
     const btnSegNone = document.getElementById('btnSegSelNone');
@@ -1731,13 +1806,7 @@
     // --- Memoria de sesiones ---
     document.querySelectorAll('[data-memfiltro]').forEach(el=>el.onclick=()=>{ memoriaFiltro = el.dataset.memfiltro; render(); });
     document.querySelectorAll('[data-memplayer]').forEach(el=>el.onclick=()=>{
-      const jugId = el.dataset.memplayer;
-      state.jugId = jugId;
-      const rec = lesionados.find(l=>l.jugId===jugId);
-      state.jugNombre = rec ? rec.nombre : '';
-      state.jugCat = rec ? rec.categoria : '';
-      const last = lastSessionFor(jugId);
-      state.regSesSel = last ? last.id : '';
+      switchToPlayer(el.dataset.memplayer);
       saveDraft(); render();
     });
     document.querySelectorAll('[data-memdel]').forEach(el=>el.onclick=()=>{
@@ -1746,6 +1815,35 @@
       if(registro[state.jugId]) registro[state.jugId] = registro[state.jugId].filter(r=>r.id!==id);
       saveRegistro(); render();
     });
+    document.querySelectorAll('[data-memtemplate]').forEach(el=>el.onclick=()=>{
+      const rec = (registro[state.jugId]||[]).find(r=>r.id===el.dataset.memtemplate);
+      if(!rec || !rec.sesionCompleta) return;
+      cargarSesionCompletaEnFicha(rec);
+      sesionEsPlantilla = true;
+      state.activeTab = 'ficha';
+      saveDraft(); render();
+    });
+
+    // --- Añadir sesión realizada (Registro y carga) ---
+    const btnAddSR = document.getElementById('btnAddSesionRapida');
+    if(btnAddSR) btnAddSR.onclick = ()=>{ sesionRapidaDraft = nuevaSesionRapida(); sesionRapidaFormOpen = true; render(); };
+    const btnSRCancel = document.getElementById('btnSesionRapidaCancel');
+    if(btnSRCancel) btnSRCancel.onclick = ()=>{ sesionRapidaFormOpen = false; sesionRapidaDraft = null; render(); };
+    const btnSRSave = document.getElementById('btnSesionRapidaSave');
+    if(btnSRSave) btnSRSave.onclick = ()=>{
+      const d = sesionRapidaDraft;
+      if(!d.fecha){ alert('Indica al menos la fecha de la sesión.'); return; }
+      const dur = Number(d.duracion)||0, rpe = Number(d.rpe)||0;
+      const rec = {id:d.id, fecha:d.fecha, numeroSesion:d.numeroSesion, fase:Number(d.fase)||1, objetivo:d.objetivo,
+        duracion:dur, rpe:rpe, carga:dur*rpe, dolorEva:d.dolorEva, cumplimiento:d.cumplimiento, observaciones:d.observaciones,
+        tests:[]};
+      if(!registro[state.jugId]) registro[state.jugId]=[];
+      registro[state.jugId].push(rec);
+      saveRegistro();
+      state.regSesSel = rec.id;
+      sesionRapidaFormOpen = false; sesionRapidaDraft = null;
+      render();
+    };
 
     const btnG = document.getElementById('btnGuardarRegistro');
     if(btnG) btnG.onclick = ()=>{
@@ -1755,12 +1853,16 @@
       const carga = dur*rpe;
       const rec = {id:uid(), fecha:state.fecha, numeroSesion:state.numeroSesion, fase:state.fase, objetivo:state.objetivo,
         duracion:dur, rpe:rpe, carga:carga, dolorEva:state.dolorEva, cumplimiento:state.cumplimiento, observaciones:state.observaciones,
-        tests:(sesion.test||[]).map(t=>({test:t.test, lado:t.lado, resultado:t.resultado, referencia:t.referencia, notas:t.notas}))};
+        tests:(sesion.test||[]).map(t=>({test:t.test, lado:t.lado, resultado:t.resultado, referencia:t.referencia, notas:t.notas})),
+        sesionCompleta: snapshotSesionCompleta()};
       if(!registro[state.jugId]) registro[state.jugId]=[];
       registro[state.jugId].push(rec);
       saveRegistro();
       jugadores[state.jugId] = {nombre:state.jugNombre, categoria:state.jugCat};
       saveJugadores();
+      sesionEsPlantilla = false;
+      state.draftJugId = state.jugId;
+      state.draftSessionId = rec.id;
       const flag = document.getElementById('guardarFlag');
       if(flag){ flag.style.opacity='1'; setTimeout(()=>{ flag.style.opacity='0'; }, 1800); }
     };
@@ -1842,6 +1944,10 @@
         if(citaDraft) citaDraft[m[1]] = t.value;
         return;
       }
+      if((m = t.id.match(/^sr-(fecha|numeroSesion|objetivo|duracion|rpe|dolorEva|observaciones)$/))){
+        if(sesionRapidaDraft) sesionRapidaDraft[m[1]] = t.value;
+        return;
+      }
     });
     app.addEventListener('change', (e)=>{
       const t=e.target;
@@ -1859,6 +1965,8 @@
       if(t.id==='ldr-faseInicial'){ if(rosterDraft) rosterDraft.faseInicial = Number(t.value)||1; }
       if(t.id==='cit-jugId'){ if(citaDraft) citaDraft.jugId = t.value; }
       if(t.id==='cit-lugar'){ if(citaDraft) citaDraft.lugar = t.value; }
+      if(t.id==='sr-fase'){ if(sesionRapidaDraft) sesionRapidaDraft.fase = Number(t.value)||1; }
+      if(t.id==='sr-cumplimiento'){ if(sesionRapidaDraft) sesionRapidaDraft.cumplimiento = t.value; }
       if((m = t.id.match(/^ses-([a-z]+)-([^-]+)-name$/))){
         const section=m[1], rowId=m[2];
         const item = (sesion[section]||[]).find(x=>x.rowId===rowId);
@@ -1891,10 +1999,48 @@
   };
   document.getElementById('btnNueva').onclick = () => {
     if(!confirm('¿Empezar una sesión nueva? Se perderán los ejercicios añadidos a la sesión actual (el registro de carga no se ve afectado).')) return;
-    sesion = {calentamiento:[], gym:[], campo:[], vuelta:[]};
+    sesion = {calentamiento:[], gym:[], campo:[], vuelta:[], test:[]};
     state.objetivo=''; state.rpeSesion=''; state.dolorEva='0'; state.cumplimiento='Completo'; state.observaciones='';
+    sesionEsPlantilla = false; state.draftJugId = state.jugId;
     saveDraft(); render();
   };
+
+  // ================= AJUSTE A UNA SOLA HOJA AL IMPRIMIR =================
+  // Encoge (con transform:scale) el contenido imprimible si no cabe en una página A4 apaisado.
+  const PRINT_BUDGET_H = 560; // alto útil aproximado (px) tras la cabecera y los márgenes de página
+  const PRINT_BUDGET_W = 1030; // ancho útil aproximado (px) en A4 apaisado
+  const PRINT_SCALE_FLOOR = 0.4; // no reducir el texto por debajo de este factor, aunque no quepa entero
+  function printTarget(){
+    return document.querySelector('.rcf-print-landscape') || document.getElementById('viewContainer');
+  }
+  function fitPrintToOnePage(){
+    const el = printTarget();
+    if(!el) return;
+    el.style.transform = 'none';
+    el.style.width = '';
+    const naturalH = el.scrollHeight;
+    const naturalW = el.scrollWidth;
+    const scaleH = PRINT_BUDGET_H / naturalH;
+    const scaleW = PRINT_BUDGET_W / naturalW;
+    let scale = Math.min(1, scaleH, scaleW);
+    if(scale < 1){
+      scale = Math.max(PRINT_SCALE_FLOOR, scale);
+      el.style.transformOrigin = 'top left';
+      el.style.transform = 'scale('+scale+')';
+      el.style.width = (100/scale)+'%';
+    }
+  }
+  function undoPrintFit(){
+    const el = printTarget();
+    if(el){ el.style.transform = ''; el.style.width = ''; }
+  }
+  window.addEventListener('beforeprint', fitPrintToOnePage);
+  window.addEventListener('afterprint', undoPrintFit);
+  if(window.matchMedia){
+    window.matchMedia('print').addEventListener('change', (e)=>{
+      if(e.matches) fitPrintToOnePage(); else undoPrintFit();
+    });
+  }
 
   attachGlobalInput();
   loadAll();
