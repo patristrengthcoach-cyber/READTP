@@ -877,8 +877,13 @@
     if(!sc) return false;
     return ['calentamiento','gym','campo','vuelta'].some(k => (sc[k]||[]).length > 0);
   }
-  function cargarSesionCompletaEnFicha(rec){
-    const sc = rec.sesionCompleta || {};
+  function cargarContextoSesion(rec){
+    if(rec.fase) state.fase = Number(rec.fase);
+    if(rec.objetivo) state.objetivo = rec.objetivo;
+    const nextNum = parseInt(rec.numeroSesion, 10);
+    state.numeroSesion = isNaN(nextNum) ? '' : String(nextNum+1);
+  }
+  function cargarEjerciciosEnFicha(sc){
     const withFreshIds = (arr)=> (arr||[]).map(x=>Object.assign({}, x, {rowId:uid()}));
     sesion = {
       calentamiento: withFreshIds(sc.calentamiento), gym: withFreshIds(sc.gym),
@@ -886,10 +891,10 @@
     };
     if(sc.blockMin) state.blockMin = Object.assign({}, sc.blockMin);
     if(sc.tipoloc) state.tipoloc = sc.tipoloc;
-    if(rec.fase) state.fase = Number(rec.fase);
-    if(rec.objetivo) state.objetivo = rec.objetivo;
-    const nextNum = parseInt(rec.numeroSesion, 10);
-    state.numeroSesion = isNaN(nextNum) ? '' : String(nextNum+1);
+  }
+  function cargarSesionCompletaEnFicha(rec){
+    cargarContextoSesion(rec);
+    cargarEjerciciosEnFicha(rec.sesionCompleta || {});
   }
   function totalDuracion(){
     const secs = sectionsVisible(state.tipoloc);
@@ -1479,8 +1484,13 @@
     state.regSesSel = last ? last.id : '';
     const lastId = last ? last.id : null;
     if(!sesionEsPlantilla && jugId && lastId !== state.draftSessionId){
-      if(last && sesionCompletaTieneContenido(last.sesionCompleta)){
-        cargarSesionCompletaEnFicha(last);
+      if(last){
+        cargarContextoSesion(last); // fase, objetivo y nº de sesión sugerido: siempre, tenga o no ejercicios guardados
+        if(sesionCompletaTieneContenido(last.sesionCompleta)){
+          cargarEjerciciosEnFicha(last.sesionCompleta);
+        } else if(jugId !== state.draftJugId){
+          sesion = {calentamiento:[], gym:[], campo:[], vuelta:[], test:[]};
+        }
       } else if(jugId !== state.draftJugId){
         sesion = {calentamiento:[], gym:[], campo:[], vuelta:[], test:[]};
       }
