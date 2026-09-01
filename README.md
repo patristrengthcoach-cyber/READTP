@@ -32,7 +32,7 @@ No sustituye el criterio médico ni fisioterapéutico. Es una herramienta de apo
 - **Fase actualizada sola**: se toma de la fase de la última sesión registrada para ese jugador (si no hay sesiones, se usa la fase inicial indicada al darlo de alta en el seguimiento).
 - **Días de baja en vivo**, calculados siempre respecto a hoy.
 - Tabla con el mismo formato que el informe en papel (Cat. · Jugador · Lesión · Días de baja · Fase I–V · RTP · Optimización individual · Pronóstico), coloreada por categoría, con nota editable de objetivo/estado bajo la fase actual (con botón para traerla directamente de la última sesión registrada). Pensada también para descargar y compartir con el director deportivo del club.
-- Botón **Descargar informe**: imprime/exporta a PDF en A4 apaisado, **ajustado automáticamente para caber en una sola hoja** (si el contenido no cabe entero, se reduce el tamaño hasta encajar, sin cortar información); jugadores dados de alta se pueden archivar sin perder el histórico.
+- Botón **Descargar informe**: imprime/exporta a PDF en A4 apaisado, **ajustado automáticamente para caber en una sola hoja** (si el contenido no cabe entero, se reduce el tamaño hasta encajar, con un límite para no dejar el texto ilegible — si una sesión es muy larga, pasa a una segunda hoja con la cabecera de columnas repetida en vez de encoger más); jugadores dados de alta se pueden archivar sin perder el histórico.
 
 ### Calendario semanal de citas
 - Pestaña con una vista semanal (lunes a domingo) para anotar la **hora a la que se cita a cada jugador** a su sesión de readaptación — como una agenda semanal de readaptación.
