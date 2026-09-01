@@ -254,7 +254,10 @@
   .rcf-app, .rcf-app *{visibility:visible;}
   .rcf-app{box-shadow:none; max-width:100%; border-radius:0;}
   .no-print{display:none !important;}
-  .rcf-header{background:var(--navy) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  .rcf-header{background:var(--navy) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:8px 20px !important; gap:12px !important;}
+  .rcf-crest{height:34px !important;}
+  .rcf-htext h1{font-size:15px !important; margin:0 !important;}
+  .rcf-htext p{font-size:8px !important;}
   .rcf-tl-seg{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
   .rcf-card{break-inside:avoid;}
   .rcf-section{break-inside:avoid; padding:8px 20px;}
@@ -2038,7 +2041,7 @@
 
   // ================= AJUSTE A UNA SOLA HOJA AL IMPRIMIR =================
   // Encoge (con transform:scale) el contenido imprimible si no cabe en una página A4 apaisado.
-  const PRINT_BUDGET_H = 560; // alto útil aproximado (px) tras la cabecera y los márgenes de página
+  const PRINT_BUDGET_H = 620; // alto útil aproximado (px) tras la cabecera (ya reducida al imprimir) y los márgenes de página
   const PRINT_BUDGET_W = 1030; // ancho útil aproximado (px) en A4 apaisado
   const PRINT_SCALE_FLOOR = 0.4; // no reducir el texto por debajo de este factor, aunque no quepa entero
   function printTarget(){
