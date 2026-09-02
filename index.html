@@ -260,7 +260,7 @@
   .rcf-htext p{font-size:8px !important;}
   .rcf-tl-seg{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
   .rcf-card{break-inside:avoid;}
-  .rcf-section{break-inside:avoid; padding:8px 20px;}
+  .rcf-section{break-inside:auto; padding:8px 20px;}
   .print-only{display:block !important;}
 
   /* Compactación general de cualquier tabla de ficha al imprimir (Ficha de sesión, Test, Memoria) */
@@ -277,7 +277,7 @@
   table.rcf-fichatable thead{ display:table-header-group; }
   table.rcf-fichatable tr{ break-inside:avoid; page-break-inside:avoid; }
   .rcf-blockmin{ margin-bottom:4px !important; }
-  .rcf-summary{ padding:8px 10px !important; }
+  .rcf-summary{ padding:8px 10px !important; break-inside:avoid; }
 
   /* Informe de seguimiento: fuerza que las 12 columnas quepan en el ancho de la hoja */
   .rcf-print-landscape{
