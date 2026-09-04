@@ -562,10 +562,7 @@
     return Math.max(0, daysBetween(today, d));
   }
   function currentFaseForPlayer(jugId, faseInicial){
-    const recs = registro[jugId]||[];
-    if(!recs.length) return Number(faseInicial)||1;
-    const sorted = recs.slice().sort((a,b)=> a.fecha < b.fecha ? 1 : -1);
-    return Number(sorted[0].fase)||Number(faseInicial)||1;
+    return Number(faseInicial)||1;
   }
 
   let registro = {};        // {jugId: [{id,fecha,fase,duracion,rpe,carga,dolorEva,cumplimiento,observaciones}]}
@@ -839,6 +836,10 @@
     }
   }
 
+  function actualizarFaseJugador(jugId, fase){
+    const rec = lesionados.find(l=>l.jugId===jugId);
+    if(rec && fase){ rec.faseInicial = Number(fase)||rec.faseInicial; saveLesionados(); }
+  }
   function saveDraft(){ stSet('rcf-readapt-draft', JSON.stringify({state, sesion}), false); }
 
 
@@ -1208,7 +1209,7 @@
       +   field('Posición','ldr-posicion',d.posicion)
       +   field('Fecha de la lesión','ldr-fechaLesion',d.fechaLesion,'','date')
       +   field('Temporada','ldr-temporada',d.temporada,'2025/2026')
-      +   selectFieldHtml('Fase inicial','ldr-faseInicial', faseOpts)
+      +   selectFieldHtml('Fase actual','ldr-faseInicial', faseOpts)
       +   field('Reincidencia','ldr-reincidencia', d.reincidencia, 'No / Sí, hace 3 meses…')
       + '</div>'
       + '<div class="rcf-field wide"><label>Diagnóstico médico / readapt. / fisio</label><input type="text" id="ldr-diagnostico" value="'+esc(d.diagnostico)+'"></div>'
@@ -1874,6 +1875,7 @@
       if(!registro[state.jugId]) registro[state.jugId]=[];
       registro[state.jugId].push(rec);
       saveRegistro();
+      actualizarFaseJugador(state.jugId, rec.fase);
       state.regSesSel = rec.id;
       sesionRapidaFormOpen = false; sesionRapidaDraft = null;
       render();
@@ -1894,6 +1896,7 @@
       saveRegistro();
       jugadores[state.jugId] = {nombre:state.jugNombre, categoria:state.jugCat};
       saveJugadores();
+      actualizarFaseJugador(state.jugId, state.fase);
       sesionEsPlantilla = false;
       state.draftJugId = state.jugId;
       state.draftSessionId = rec.id;
